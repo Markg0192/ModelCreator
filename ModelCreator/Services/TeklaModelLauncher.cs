@@ -37,6 +37,10 @@ namespace ModelCreator.Services
                         version, "bin", "TeklaStructures.exe"));
             }
 
+            // Some Severfield machines install Tekla directly beneath C:\\.
+            foreach (string version in new[] { "2026", "2026.0", "26" })
+                candidates.Add(Path.Combine(@"C:\Tekla Structures", version, "bin", "TeklaStructures.exe"));
+
             // Corporate deployments may use INSTALLDIR instead of Program Files.
             // The product registers its installation beneath this key.
             foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
