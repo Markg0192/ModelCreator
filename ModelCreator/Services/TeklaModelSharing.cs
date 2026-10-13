@@ -23,7 +23,7 @@ namespace ModelCreator.Services
                     connectedPath + " | Expected: " + expected);
 
             var handler = new ModelSharingHandler();
-            var result = await handler.StartSharingAsync(code, description);
+            var result = await handler.StartSharingAsync(code, description).ConfigureAwait(false);
             if (result.Code != SharingResultCode.OK)
                 throw new InvalidOperationException("Tekla Model Sharing failed: " +
                     result.Code + " " + result.ErrorDetails);
