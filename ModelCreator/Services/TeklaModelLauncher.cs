@@ -8,7 +8,7 @@ namespace ModelCreator.Services
     {
         private const string TemplateName = "SEVERFIELD_Model_Template";
         private static readonly string RootFolder =
-            @"C:\Tekla Structures Models 2026";
+            @"C:\TeklaStructuresModels2026";
         private static readonly string Executable =
             @"C:\Program Files\Tekla Structures\2026.0\bin\TeklaStructures.exe";
 
