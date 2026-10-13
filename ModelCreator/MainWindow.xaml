@@ -64,9 +64,6 @@
             <Button x:Name="RetryPropertiesButton" Content="Apply to Open Model"
                     MinWidth="175" Height="36" Padding="12,6" Margin="0,0,12,0"
                     Click="RetryPropertiesButton_Click"/>
-            <Button x:Name="TestSharingButton" Content="Test Model Sharing"
-                    MinWidth="155" Height="36" Padding="12,6" Margin="0,0,12,0"
-                    Click="TestSharingButton_Click"/>
             <Button x:Name="CreateButton" Content="Create Model"
                     MinWidth="145" Height="36" Padding="15,6"
                     Click="CreateButton_Click"/>
