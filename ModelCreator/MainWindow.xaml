@@ -24,7 +24,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Text="Contract number" VerticalAlignment="Center"/>
-            <TextBox x:Name="ContractNumberInput" Grid.Column="1" Height="30"
+            <TextBox x:Name="ContractNumberInput" Grid.Column="1" Height="30" Text="C1234"
                      VerticalContentAlignment="Center" Padding="7,0" TextChanged="InputsChanged"/>
         </Grid>
         <Grid Grid.Row="3" Margin="0,0,0,14">
@@ -33,7 +33,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Text="Project name" VerticalAlignment="Center"/>
-            <TextBox x:Name="ProjectNameInput" Grid.Column="1" Height="30"
+            <TextBox x:Name="ProjectNameInput" Grid.Column="1" Height="30" Text="test model"
                      VerticalContentAlignment="Center" Padding="7,0" TextChanged="InputsChanged"/>
         </Grid>
         <Grid Grid.Row="4" Margin="0,0,0,14">
