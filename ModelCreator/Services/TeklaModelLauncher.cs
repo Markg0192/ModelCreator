@@ -93,8 +93,8 @@ namespace ModelCreator.Services
             var startInfo = new ProcessStartInfo
             {
                 FileName = executable,
-                Arguments = "/create:\\"" + destination + "\\" /modelTemplate:\\"" +
-                            TemplateName + "\\"",
+                Arguments = "/create:" + (char)34 + destination + (char)34 +
+                            " /modelTemplate:" + (char)34 + TemplateName + (char)34,
                 UseShellExecute = false,
                 WorkingDirectory = Path.GetDirectoryName(executable)
             };
