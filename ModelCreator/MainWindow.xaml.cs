@@ -95,6 +95,69 @@ namespace ModelCreator
             }
         }
 
+        private void RetryPropertiesButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_projectTimer != null && _projectTimer.IsEnabled)
+            {
+                StatusMessage.Text = "Wait for the current operation to finish before retrying.";
+                return;
+            }
+
+            RetryPropertiesButton.IsEnabled = false;
+            try
+            {
+                string name = ModelNaming.ValidateAndBuild(
+                    ContractNumberInput.Text, ProjectNameInput.Text);
+                string path = _launcher.GetDestination(name);
+                string contract = ContractNumberInput.Text.Trim().ToUpperInvariant();
+                string project = ProjectNameInput.Text.Trim();
+                string diagnostic;
+                string actual = TeklaProjectProperties.GetConnectedModelPath(out diagnostic);
+                if (actual == null)
+                {
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                    StatusMessage.Text = "Cannot connect to open model: " + diagnostic;
+                    MessageBox.Show(StatusMessage.Text, "Tekla connection", MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                string expected = System.IO.Path.GetFullPath(path)
+                    .TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                    StatusMessage.Text = "Connected to a different model. Connected: " + actual +
+                        " | Expected from inputs: " + expected + ". No changes made.";
+                    MessageBox.Show(StatusMessage.Text, "Model mismatch", MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                string result;
+                bool success = TeklaProjectProperties.TryApply(path, contract, project, out result);
+                StatusMessage.Foreground = success
+                    ? System.Windows.Media.Brushes.DarkGreen
+                    : System.Windows.Media.Brushes.Firebrick;
+                StatusMessage.Text = success
+                    ? "Project properties updated successfully: " + contract + " - " + project
+                    : "Project properties not updated: " + result;
+                MessageBox.Show(StatusMessage.Text, "Project properties", MessageBoxButton.OK,
+                    success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                StatusMessage.Text = "Project property retry error: " + ex.Message;
+                MessageBox.Show(StatusMessage.Text, "Project properties", MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            finally
+            {
+                RetryPropertiesButton.IsEnabled = true;
+            }
+        }
+
         private void StopProjectTimer()
         {
             if (_projectTimer != null)
