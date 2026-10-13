@@ -168,7 +168,7 @@ namespace ModelCreator
             }
         }
 
-        private void ConnectTestButton_Click(object sender, RoutedEventArgs e)
+        private async void ConnectTestButton_Click(object sender, RoutedEventArgs e)
         {
             if (_projectTimer != null && _projectTimer.IsEnabled)
             {
@@ -190,19 +190,19 @@ namespace ModelCreator
                     throw new InvalidOperationException("Wrong model open. Connected: " + connected +
                         " | Expected: " + expected);
 
-                string instructions = "Correct Tekla model confirmed:\n\n" + connected +
-                    "\n\nTo create AND link its Trimble Connect project, in Tekla choose:" +
-                    "\nFile > Trimble Connect > Start collaboration" +
-                    "\n\nEnter the new project name: " + name +
-                    "\nChoose your company's approved project server location and licence." +
-                    "\n\nConfirm creation in Tekla. This test button does not yet create " +
-                    "a Connect project automatically; API authentication and the correct " +
-                    "company subscription must be configured before we automate it.";
-                MessageBox.Show(instructions, "Trimble Connect assisted test",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                ConnectTestButton.IsEnabled = false;
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Trimble Connect: model verified. Complete project creation " +
-                    "and linking in Tekla via File > Trimble Connect > Start collaboration.";
+                StatusMessage.Text = "Trimble Connect: checking API credentials for the Europe region...";
+                string outcome = await TrimbleConnectAccess.DiagnoseAsync();
+                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                StatusMessage.Text = outcome;
+                MessageBox.Show("Open model confirmed: " + connected +
+                    "\\n\\nProject name: " + name +
+                    "\\nRegion: Europe" +
+                    "\\nOwnership: Severfield plc — TrimbleConnectBusinessPremium" +
+                    "\\n\\n" + outcome,
+                    "Trimble Connect API test", MessageBoxButton.OK,
+                    MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -210,6 +210,10 @@ namespace ModelCreator
                 StatusMessage.Text = "Trimble Connect test: " + ex.Message;
                 MessageBox.Show(StatusMessage.Text, "Trimble Connect",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                ConnectTestButton.IsEnabled = true;
             }
         }
 
