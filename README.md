@@ -13,7 +13,7 @@ The Create Model button:
 
 1. Validates the name and checks for a conflicting destination.
 2. Checks that the Tekla 2026 executable exists.
-3. Creates `C:\Tekla Structures Models 2026` if necessary.
+3. Creates `C:\TeklaStructuresModels2026` if necessary.
 4. Starts Tekla using `/create:"<full model path>" /modelTemplate:"SEVERFIELD_Model_Template"`.
 
 **The first prototype uses Tekla's documented command-line switches rather than an Open API dependency.** The launch returning successfully does **not** prove model creation has completed; verify the model in Tekla. The user must have the approved Severfield environment, role and template configured in Tekla.
