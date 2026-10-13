@@ -46,6 +46,7 @@
                      Background="#E9EDF2" VerticalContentAlignment="Center" Padding="7,0"/>
         </Grid>
         <StackPanel Grid.Row="5">
+            <TextBlock Text="Environment: UK  |  Role: SEVERFIELD  |  Licence: Diamond"\n                       FontWeight="SemiBold" Foreground="#19324C" Margin="0,0,0,14"/>
             <TextBlock Text="Destination" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="DestinationPreview" TextWrapping="Wrap" Foreground="#536478"/>
             <TextBlock x:Name="StatusMessage" Margin="0,18,0,0" TextWrapping="Wrap"
