@@ -61,7 +61,10 @@ namespace ModelCreator
                     ((ComboBoxItem)LicenseSelector.SelectedItem).Content,
                     "Confirm model creation",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                {
+                    CreateButton.IsEnabled = true;
                     return;
+                }
 
                 string license = ((ComboBoxItem)LicenseSelector.SelectedItem).Tag.ToString();
                 _launcher.Launch(name, license);
@@ -89,67 +92,6 @@ namespace ModelCreator
                 StatusMessage.Text = ex.Message;
                 MessageBox.Show(ex.Message, "ModelCreator",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-
-        private void TestProjectPropertiesButton_Click(object sender, RoutedEventArgs e)
-        {
-            TestProjectPropertiesButton.IsEnabled = false;
-            try
-            {
-                // Reuse existing input validation but do not create or launch a model.
-                ModelNaming.ValidateAndBuild(
-                    ContractNumberInput.Text, ProjectNameInput.Text);
-                string contract = ContractNumberInput.Text.Trim().ToUpperInvariant();
-                string project = ProjectNameInput.Text.Trim();
-
-                string diagnostic;
-                string connectedPath = TeklaProjectProperties.GetConnectedModelPath(out diagnostic);
-                if (connectedPath == null)
-                {
-                    StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                    StatusMessage.Text = "Test failed: " + diagnostic;
-                    MessageBox.Show(StatusMessage.Text, "Tekla connection test",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                if (MessageBox.Show(
-                    "Connected to this Tekla model:\\n\\n" + connectedPath +
-                    "\\n\\nSet Project Number to: " + contract +
-                    "\\nSet Project Name to: " + project +
-                    "\\n\\nThis modifies the OPEN model. Continue?",
-                    "Confirm project property test",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-                {
-                    StatusMessage.Text = "Test cancelled; no project properties changed.";
-                    return;
-                }
-
-                string writeDiagnostic;
-                bool success = TeklaProjectProperties.TryApply(
-                    connectedPath, contract, project, out writeDiagnostic);
-
-                StatusMessage.Foreground = success
-                    ? System.Windows.Media.Brushes.DarkGreen
-                    : System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = success
-                    ? "Test passed. Project properties updated in: " + connectedPath
-                    : "Test did not update the model: " + writeDiagnostic;
-                MessageBox.Show(StatusMessage.Text, "Tekla project properties test",
-                    MessageBoxButton.OK,
-                    success ? MessageBoxImage.Information : MessageBoxImage.Warning);
-            }
-            catch (Exception ex)
-            {
-                StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Test error: " + ex.ToString();
-                MessageBox.Show(StatusMessage.Text, "Tekla project properties test",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            finally
-            {
-                TestProjectPropertiesButton.IsEnabled = true;
             }
         }
 
