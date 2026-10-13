@@ -83,10 +83,13 @@ namespace ModelCreator.Services
                 "and check the Target path. Please provide that path so it can be configured.");
         }
 
-        public void Launch(string modelName)
+        public void Launch(string modelName, string license)
         {
             if (string.IsNullOrWhiteSpace(modelName))
                 throw new ArgumentException("Model name is required.");
+
+            if (license != "DIAMOND" && license != "CARBON")
+                throw new ArgumentException("Unsupported Tekla licence selection.");
 
             string destination = GetDestination(modelName);
             if (Directory.Exists(destination) || File.Exists(destination))
@@ -114,7 +117,7 @@ namespace ModelCreator.Services
             {
                 "set XS_DEFAULT_ENVIRONMENT=" + envPath,
                 "set XS_DEFAULT_ROLE=" + rolePath,
-                "set XS_DEFAULT_LICENSE=DIAMOND"
+                "set XS_DEFAULT_LICENSE=" + license
             });
             Directory.CreateDirectory(RootFolder);
 
