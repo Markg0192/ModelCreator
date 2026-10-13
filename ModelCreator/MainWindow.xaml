@@ -60,8 +60,13 @@
             <TextBlock x:Name="StatusMessage" Margin="0,18,0,0" TextWrapping="Wrap"
                        Foreground="#9A3A29"/>
         </StackPanel>
-        <Button x:Name="CreateButton" Grid.Row="6" Content="Create Model"
-                HorizontalAlignment="Right" MinWidth="145" Height="36"
-                Padding="15,6" Click="CreateButton_Click"/>
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="RetryPropertiesButton" Content="Apply to Open Model"
+                    MinWidth="175" Height="36" Padding="12,6" Margin="0,0,12,0"
+                    Click="RetryPropertiesButton_Click"/>
+            <Button x:Name="CreateButton" Content="Create Model"
+                    MinWidth="145" Height="36" Padding="15,6"
+                    Click="CreateButton_Click"/>
+        </StackPanel>
     </Grid>
 </Window>
