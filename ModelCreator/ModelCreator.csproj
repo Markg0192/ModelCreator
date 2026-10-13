@@ -8,4 +8,14 @@
     <RootNamespace>ModelCreator</RootNamespace>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Tekla.Structures">
+      <HintPath>C:\TeklaStructures\2026.0\bin\Tekla.Structures.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Tekla.Structures.Model">
+      <HintPath>C:\TeklaStructures\2026.0\bin\Tekla.Structures.Model.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
 </Project>
