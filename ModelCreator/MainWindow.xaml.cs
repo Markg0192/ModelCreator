@@ -246,7 +246,7 @@ namespace ModelCreator
                 var info = new ProcessStartInfo
                 {
                     FileName = exe,
-                    Arguments = "--apply-project-properties " + QuoteArg(expectedPath) + " " +
+                    Arguments = "--setup-model " + QuoteArg(expectedPath) + " " +
                         QuoteArg(contract) + " " + QuoteArg(project) + " " + QuoteArg(resultFile),
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -256,11 +256,11 @@ namespace ModelCreator
                 {
                     if (child == null)
                         throw new InvalidOperationException("Could not launch Tekla API helper.");
-                    if (!child.WaitForExit(20000))
+                    if (!child.WaitForExit(300000))
                     {
                         child.Kill();
                         child.WaitForExit();
-                        return "WAIT\nTekla API connection attempt timed out.";
+                        return "ERROR\nModel setup helper timed out; check Model Sharing before retrying to avoid duplicates.";
                     }
                 }
                 return File.Exists(resultFile)
@@ -289,7 +289,7 @@ namespace ModelCreator
             {
                 StopProjectTimer();
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Project properties were not confirmed within five minutes. " +
+                StatusMessage.Text = "Model setup was not confirmed within five minutes. " +
                     "Last check: " + _lastDiagnostic;
                 return;
             }
@@ -310,14 +310,14 @@ namespace ModelCreator
                 {
                     StopProjectTimer();
                     StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                    StatusMessage.Text = "Project properties updated successfully: " +
-                        _pendingContract + " - " + _pendingProject;
+                    StatusMessage.Text = "Model setup complete. Project properties saved and " +
+                        "Model Sharing enabled: " + diagnostic;
                 }
                 else if (outcome == "ERROR")
                 {
                     StopProjectTimer();
                     StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                    StatusMessage.Text = "Project properties failed: " + diagnostic;
+                    StatusMessage.Text = "Model setup failed: " + diagnostic;
                     MessageBox.Show(StatusMessage.Text, "ModelCreator", MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                 }
