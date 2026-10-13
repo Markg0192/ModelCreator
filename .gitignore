@@ -1,0 +1,7 @@
+# Visual Studio / MSBuild
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.cache
