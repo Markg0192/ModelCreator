@@ -20,6 +20,9 @@ namespace ModelCreator.Services
         {
             var candidates = new List<string>();
 
+            // Confirmed installation path on the development workstation.
+            candidates.Add(@"C:\TeklaStructures\2026.0\bin\TeklaStructures.exe");
+
             // The standard 2026 directory is "2026", but some installations
             // and deployment configurations use "2026.0".
             foreach (string programFiles in new[]
