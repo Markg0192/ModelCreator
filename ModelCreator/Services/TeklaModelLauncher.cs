@@ -95,12 +95,34 @@ namespace ModelCreator.Services
                     "\n\nNo files have been changed.");
 
             string executable = FindTeklaExecutable();
+            // Derive environment location from the executable installation, not a hardcoded version.
+            string versionRoot = Directory.GetParent(Path.GetDirectoryName(executable)).FullName;
+            string dataRoot = Path.Combine(versionRoot, "Environments", "uk");
+            string envPath = Path.Combine(dataRoot, "env_UK.ini");
+            string rolePath = Path.Combine(dataRoot, "role_SEVERFIELD.ini");
+            if (!File.Exists(envPath))
+                throw new FileNotFoundException("UK environment was not found: " + envPath);
+            if (!File.Exists(rolePath))
+                throw new FileNotFoundException("Severfield role was not found: " + rolePath);
+
+            string configFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ModelCreator");
+            Directory.CreateDirectory(configFolder);
+            string bypassPath = Path.Combine(configFolder, "Bypass2026.ini");
+            File.WriteAllLines(bypassPath, new[]
+            {
+                "set XS_DEFAULT_ENVIRONMENT=" + envPath,
+                "set XS_DEFAULT_ROLE=" + rolePath,
+                "set XS_DEFAULT_LICENSE=DIAMOND"
+            });
             Directory.CreateDirectory(RootFolder);
 
             var startInfo = new ProcessStartInfo
             {
                 FileName = executable,
-                Arguments = "/create:" + (char)34 + destination + (char)34 +
+                Arguments = "-I " + (char)34 + bypassPath + (char)34 +
+                            " /create:" + (char)34 + destination + (char)34 +
                             " /modelTemplate:" + (char)34 + TemplateName + (char)34,
                 UseShellExecute = false,
                 WorkingDirectory = Path.GetDirectoryName(executable)
