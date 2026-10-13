@@ -1,4 +1,7 @@
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -15,6 +18,7 @@ namespace ModelCreator
         private string _pendingContract;
         private string _pendingProject;
         private string _lastDiagnostic = "";
+        private bool _projectProbeRunning;
 
         public MainWindow()
         {
@@ -169,8 +173,56 @@ namespace ModelCreator
             CreateButton.IsEnabled = true;
         }
 
-        private void ProjectTimer_Tick(object sender, EventArgs e)
+        private static string ProbeProjectProperties(string expectedPath, string contract,
+            string project)
         {
+            string resultFile = Path.Combine(Path.GetTempPath(),
+                "ModelCreatorProbe_" + Guid.NewGuid().ToString("N") + ".txt");
+            try
+            {
+                string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                var info = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = "--apply-project-properties " + QuoteArg(expectedPath) + " " +
+                        QuoteArg(contract) + " " + QuoteArg(project) + " " + QuoteArg(resultFile),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetDirectoryName(exe)
+                };
+                using (Process child = Process.Start(info))
+                {
+                    if (child == null)
+                        throw new InvalidOperationException("Could not launch Tekla API helper.");
+                    if (!child.WaitForExit(20000))
+                    {
+                        child.Kill();
+                        child.WaitForExit();
+                        return "WAIT\\nTekla API connection attempt timed out.";
+                    }
+                }
+                return File.Exists(resultFile)
+                    ? File.ReadAllText(resultFile)
+                    : "ERROR\\nTekla API helper exited without reporting a result.";
+            }
+            finally
+            {
+                try { if (File.Exists(resultFile)) File.Delete(resultFile); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        private static string QuoteArg(string value)
+        {
+            return "\\\"" + value.Replace("\\\"", "\\\\\\\"") + "\\\"";
+        }
+
+        private async void ProjectTimer_Tick(object sender, EventArgs e)
+        {
+            if (_projectProbeRunning)
+                return;
+
             if (DateTime.UtcNow >= _projectDeadline)
             {
                 StopProjectTimer();
@@ -180,31 +232,50 @@ namespace ModelCreator
                 return;
             }
 
+            _projectProbeRunning = true;
             try
             {
-                string diagnostic;
-                if (!TeklaProjectProperties.TryApply(
-                        _expectedModelPath, _pendingContract, _pendingProject, out diagnostic))
-                {
-                    _lastDiagnostic = diagnostic;
-                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                    StatusMessage.Text = diagnostic;
-                    return;
-                }
+                // Each attempt runs in a new process so early failed Tekla API
+                // connections cannot be cached across subsequent attempts.
+                string result = await Task.Run(() => ProbeProjectProperties(
+                    _expectedModelPath, _pendingContract, _pendingProject));
+                string[] lines = result.Split(new[] { '\\n' }, 2);
+                string outcome = lines[0].Trim();
+                string diagnostic = lines.Length > 1 ? lines[1].Trim() : result;
+                _lastDiagnostic = diagnostic;
 
-                StopProjectTimer();
-                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                StatusMessage.Text = "Project properties updated successfully: " +
-                    _pendingContract + " - " + _pendingProject;
+                if (outcome == "OK")
+                {
+                    StopProjectTimer();
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
+                    StatusMessage.Text = "Project properties updated successfully: " +
+                        _pendingContract + " - " + _pendingProject;
+                }
+                else if (outcome == "ERROR")
+                {
+                    StopProjectTimer();
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                    StatusMessage.Text = "Project properties failed: " + diagnostic;
+                    MessageBox.Show(StatusMessage.Text, "ModelCreator", MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                else
+                {
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                    StatusMessage.Text = "Waiting for Tekla API: " + diagnostic;
+                }
             }
             catch (Exception ex)
             {
                 StopProjectTimer();
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Model launched, but project properties could not be updated: " +
-                                     ex.Message;
-                MessageBox.Show(StatusMessage.Text, "ModelCreator",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                StatusMessage.Text = "Project connection attempt failed: " + ex.Message;
+                MessageBox.Show(StatusMessage.Text, "ModelCreator", MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _projectProbeRunning = false;
             }
         }
     }
