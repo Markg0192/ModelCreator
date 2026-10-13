@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="ModelCreator — Tekla Structures 2026"
-        Width="620" Height="425" MinWidth="540" MinHeight="400"
+        Width="620" Height="455" MinWidth="540" MinHeight="430"
         WindowStartupLocation="CenterScreen" Background="#F4F6F9">
     <Grid Margin="26">
         <Grid.RowDefinitions>
@@ -46,7 +46,15 @@
                      Background="#E9EDF2" VerticalContentAlignment="Center" Padding="7,0"/>
         </Grid>
         <StackPanel Grid.Row="5">
-            <TextBlock Text="Environment: UK  |  Role: SEVERFIELD  |  Licence: Diamond"\n                       FontWeight="SemiBold" Foreground="#19324C" Margin="0,0,0,14"/>
+            <TextBlock Text="Tekla 2026 • UK environment • SEVERFIELD role"
+                       FontWeight="SemiBold" Foreground="#19324C" Margin="0,0,0,10"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <TextBlock Text="Licence" Width="155" VerticalAlignment="Center"/>
+                <ComboBox x:Name="LicenseSelector" Width="170" Height="30" SelectedIndex="0">
+                    <ComboBoxItem Content="Diamond" Tag="DIAMOND"/>
+                    <ComboBoxItem Content="Carbon" Tag="CARBON"/>
+                </ComboBox>
+            </StackPanel>
             <TextBlock Text="Destination" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="DestinationPreview" TextWrapping="Wrap" Foreground="#536478"/>
             <TextBlock x:Name="StatusMessage" Margin="0,18,0,0" TextWrapping="Wrap"
