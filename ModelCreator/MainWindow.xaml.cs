@@ -246,12 +246,34 @@ namespace ModelCreator
                 {
                     if (child == null)
                         throw new InvalidOperationException("Could not launch Tekla API helper.");
-                    if (!child.WaitForExit(300000))
+                    // The helper may have written its result but still be shutting down
+                    // its Tekla/Open API runtime. Use the result as completion signal,
+                    // rather than waiting for full process exit.
+                    DateTime deadline = DateTime.UtcNow.AddSeconds(startSharing ? 120 : 20);
+                    while (DateTime.UtcNow < deadline)
                     {
-                        child.Kill();
-                        child.WaitForExit();
-                        return "ERROR\nModel setup helper timed out; check Model Sharing before retrying to avoid duplicates.";
+                        if (File.Exists(resultFile))
+                        {
+                            try
+                            {
+                                string response = File.ReadAllText(resultFile);
+                                if (!string.IsNullOrWhiteSpace(response))
+                                    return response;
+                            }
+                            catch (IOException) { } // Helper may still be writing.
+                        }
+                        if (child.HasExited)
+                            break;
+                        System.Threading.Thread.Sleep(250);
                     }
+                    if (!child.HasExited)
+                    {
+                        try { child.Kill(); child.WaitForExit(3000); }
+                        catch (InvalidOperationException) { }
+                    }
+                    return startSharing
+                        ? "ERROR\nModel Sharing response not received. Check its status in Tekla; do not retry sharing automatically."
+                        : "WAIT\nTekla API helper timed out waiting for a connection.";
                 }
                 return File.Exists(resultFile)
                     ? File.ReadAllText(resultFile)
