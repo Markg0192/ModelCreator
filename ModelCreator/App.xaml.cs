@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using ModelCreator.Services;
 
@@ -40,8 +41,10 @@ namespace ModelCreator
             {
                 try
                 {
-                    string result = TeklaModelSharing.StartAsync(
-                        e.Args[1], e.Args[2], e.Args[3]).GetAwaiter().GetResult();
+                    // Do not block the WPF dispatcher while waiting for Tekla's async
+                    // sharing operation: continuations may need that context.
+                    string result = Task.Run(() => TeklaModelSharing.StartAsync(
+                        e.Args[1], e.Args[2], e.Args[3]       )).GetAwaiter().GetResult();
                     File.WriteAllText(e.Args[4], "OK" + Environment.NewLine + result);
                 }
                 catch (Exception ex)
