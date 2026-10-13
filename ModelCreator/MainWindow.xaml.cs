@@ -14,6 +14,7 @@ namespace ModelCreator
         private string _expectedModelPath;
         private string _pendingContract;
         private string _pendingProject;
+        private string _lastDiagnostic = "";
 
         public MainWindow()
         {
@@ -68,6 +69,7 @@ namespace ModelCreator
                 _expectedModelPath = path;
                 _pendingContract = contract;
                 _pendingProject = project;
+                _lastDiagnostic = "Waiting for the first Tekla API check.";
                 _projectDeadline = DateTime.UtcNow.AddMinutes(5);
 
                 _projectTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -78,8 +80,7 @@ namespace ModelCreator
                 _projectTimer.Start();
 
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                StatusMessage.Text = "Tekla launched. Waiting for the new model to open " +
-                                     "before setting project properties...";
+                StatusMessage.Text = "Tekla launched. Waiting for the new model to open...";
             }
             catch (Exception ex)
             {
@@ -108,16 +109,22 @@ namespace ModelCreator
             {
                 StopProjectTimer();
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "The model launch was requested, but project properties " +
-                    "could not be confirmed within five minutes. Check the model in Tekla.";
+                StatusMessage.Text = "Project properties were not confirmed within five minutes. " +
+                    "Last check: " + _lastDiagnostic;
                 return;
             }
 
             try
             {
+                string diagnostic;
                 if (!TeklaProjectProperties.TryApply(
-                        _expectedModelPath, _pendingContract, _pendingProject))
+                        _expectedModelPath, _pendingContract, _pendingProject, out diagnostic))
+                {
+                    _lastDiagnostic = diagnostic;
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                    StatusMessage.Text = diagnostic;
                     return;
+                }
 
                 StopProjectTimer();
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
