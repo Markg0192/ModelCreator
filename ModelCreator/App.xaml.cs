@@ -37,6 +37,8 @@ namespace ModelCreator
             }
 
             base.OnStartup(e);
+            MainWindow = new MainWindow();
+            MainWindow.Show();
         }
     }
 }
