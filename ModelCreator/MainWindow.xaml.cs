@@ -19,6 +19,9 @@ namespace ModelCreator
         private string _pendingProject;
         private string _lastDiagnostic = "";
         private bool _projectProbeRunning;
+        private bool _projectPropertiesSaved;
+        private bool _sharingStarted;
+        private bool _sharingAttempted;
 
         public MainWindow()
         {
@@ -77,6 +80,9 @@ namespace ModelCreator
                 _pendingContract = contract;
                 _pendingProject = project;
                 _lastDiagnostic = "Waiting for the first Tekla API check.";
+                _projectPropertiesSaved = false;
+                _sharingStarted = false;
+                _sharingAttempted = false;
                 _projectDeadline = DateTime.UtcNow.AddMinutes(5);
 
                 _projectTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -174,7 +180,7 @@ namespace ModelCreator
         }
 
         private static string ProbeProjectProperties(string expectedPath, string contract,
-            string project)
+            string project, bool startSharing)
         {
             string resultFile = Path.Combine(Path.GetTempPath(),
                 "ModelCreatorProbe_" + Guid.NewGuid().ToString("N") + ".txt");
@@ -184,7 +190,8 @@ namespace ModelCreator
                 var info = new ProcessStartInfo
                 {
                     FileName = exe,
-                    Arguments = "--setup-model " + QuoteArg(expectedPath) + " " +
+                    Arguments = (startSharing ? "--start-sharing " : "--apply-project-properties ") +
+                        QuoteArg(expectedPath) + " " +
                         QuoteArg(contract) + " " + QuoteArg(project) + " " + QuoteArg(resultFile),
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -227,7 +234,7 @@ namespace ModelCreator
             {
                 StopProjectTimer();
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Model setup was not confirmed within five minutes. " +
+                StatusMessage.Text = "Model setup did not finish within five minutes. " +
                     "Last check: " + _lastDiagnostic;
                 return;
             }
@@ -237,8 +244,24 @@ namespace ModelCreator
             {
                 // Each attempt runs in a new process so early failed Tekla API
                 // connections cannot be cached across subsequent attempts.
+                bool startSharing = _projectPropertiesSaved;
+                if (startSharing)
+                {
+                    // Start cloud sharing ONCE. A lost result is ambiguous and must not
+                    // trigger another automatic cloud creation attempt.
+                    if (_sharingAttempted)
+                        return;
+                    _sharingAttempted = true;
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                    StatusMessage.Text = "Stage 3/3: Starting Tekla Model Sharing...";
+                }
+                else
+                {
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                    StatusMessage.Text = "Stage 2/3: Connecting and saving project properties...";
+                }
                 string result = await Task.Run(() => ProbeProjectProperties(
-                    _expectedModelPath, _pendingContract, _pendingProject));
+                    _expectedModelPath, _pendingContract, _pendingProject, startSharing));
                 string[] lines = result.Split(new[] { '\n' }, 2);
                 string outcome = lines[0].Trim();
                 string diagnostic = lines.Length > 1 ? lines[1].Trim() : result;
@@ -246,23 +269,44 @@ namespace ModelCreator
 
                 if (outcome == "OK")
                 {
-                    StopProjectTimer();
-                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                    StatusMessage.Text = "Model setup complete. Project properties saved and " +
-                        "Model Sharing enabled: " + diagnostic;
+                    if (!startSharing)
+                    {
+                        _projectPropertiesSaved = true;
+                        StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
+                        StatusMessage.Text = "Stage 2/3 complete: Project properties saved. " +
+                            "Starting Model Sharing next...";
+                    }
+                    else
+                    {
+                        _sharingStarted = true;
+                        StopProjectTimer();
+                        StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
+                        StatusMessage.Text = "Model setup complete: project properties saved and " + diagnostic;
+                    }
                 }
                 else if (outcome == "ERROR")
                 {
                     StopProjectTimer();
                     StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                    StatusMessage.Text = "Model setup failed: " + diagnostic;
+                    StatusMessage.Text = (startSharing ? "Stage 3 (Model Sharing) failed: " :
+                        "Stage 2 (project properties) failed: ") + diagnostic +
+                        (startSharing ? " Check sharing status in Tekla before retrying." : "");
                     MessageBox.Show(StatusMessage.Text, "ModelCreator", MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                 }
                 else
                 {
-                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                    StatusMessage.Text = "Waiting for Tekla API: " + diagnostic;
+                    if (startSharing)
+                    {
+                        StopProjectTimer();
+                        StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                        StatusMessage.Text = "Model Sharing status uncertain. Check in Tekla before retrying: " + diagnostic;
+                    }
+                    else
+                    {
+                        StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                        StatusMessage.Text = "Stage 2/3 waiting for Tekla API: " + diagnostic;
+                    }
                 }
             }
             catch (Exception ex)
