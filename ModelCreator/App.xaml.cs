@@ -36,24 +36,13 @@ namespace ModelCreator
                 return;
             }
 
-            if (e.Args.Length == 5 && e.Args[0] == "--setup-model")
+            if (e.Args.Length == 5 && e.Args[0] == "--start-sharing")
             {
                 try
                 {
-                    string diagnostic;
-                    bool applied = TeklaProjectProperties.TryApply(
-                        e.Args[1], e.Args[2], e.Args[3], out diagnostic);
-                    if (!applied)
-                    {
-                        File.WriteAllText(e.Args[4], "WAIT" + Environment.NewLine + diagnostic);
-                    }
-                    else
-                    {
-                        // Only start sharing after saving project properties for the exact model.
-                        string sharing = TeklaModelSharing.StartAsync(
-                            e.Args[1], e.Args[2], e.Args[3]).GetAwaiter().GetResult();
-                        File.WriteAllText(e.Args[4], "OK" + Environment.NewLine + sharing);
-                    }
+                    string result = TeklaModelSharing.StartAsync(
+                        e.Args[1], e.Args[2], e.Args[3]).GetAwaiter().GetResult();
+                    File.WriteAllText(e.Args[4], "OK" + Environment.NewLine + result);
                 }
                 catch (Exception ex)
                 {
