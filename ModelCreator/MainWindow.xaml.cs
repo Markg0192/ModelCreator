@@ -168,6 +168,51 @@ namespace ModelCreator
             }
         }
 
+        private void ConnectTestButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_projectTimer != null && _projectTimer.IsEnabled)
+            {
+                StatusMessage.Text = "Finish model setup before connecting Trimble Connect.";
+                return;
+            }
+
+            try
+            {
+                string name = ModelNaming.ValidateAndBuild(
+                    ContractNumberInput.Text, ProjectNameInput.Text);
+                string expected = Path.GetFullPath(_launcher.GetDestination(name))
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string diagnostic;
+                string connected = TeklaProjectProperties.GetConnectedModelPath(out diagnostic);
+                if (connected == null)
+                    throw new InvalidOperationException(diagnostic);
+                if (!string.Equals(expected, connected, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Wrong model open. Connected: " + connected +
+                        " | Expected: " + expected);
+
+                string instructions = "Correct Tekla model confirmed:\n\n" + connected +
+                    "\n\nTo create AND link its Trimble Connect project, in Tekla choose:" +
+                    "\nFile > Trimble Connect > Start collaboration" +
+                    "\n\nEnter the new project name: " + name +
+                    "\nChoose your company's approved project server location and licence." +
+                    "\n\nConfirm creation in Tekla. This test button does not yet create " +
+                    "a Connect project automatically; API authentication and the correct " +
+                    "company subscription must be configured before we automate it.";
+                MessageBox.Show(instructions, "Trimble Connect assisted test",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                StatusMessage.Text = "Trimble Connect: model verified. Complete project creation " +
+                    "and linking in Tekla via File > Trimble Connect > Start collaboration.";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                StatusMessage.Text = "Trimble Connect test: " + ex.Message;
+                MessageBox.Show(StatusMessage.Text, "Trimble Connect",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
         private void StopProjectTimer()
         {
             if (_projectTimer != null)
