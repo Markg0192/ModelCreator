@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.Win32;
 
 namespace ModelCreator.Services
@@ -10,6 +11,38 @@ namespace ModelCreator.Services
     {
         private const string TemplateName = "SEVERFIELD_Model_Template";
         private static readonly string RootFolder = @"C:\TeklaStructuresModels2026";
+
+        // Tekla starts asynchronously and may read its startup INI after Process.Start.
+        // Conservative grace period; older files are removed on subsequent launches.
+        private static readonly TimeSpan StartupGracePeriod = TimeSpan.FromMinutes(10);
+
+        private static void CleanOldBypassFiles(string folder)
+        {
+            if (!Directory.Exists(folder))
+                return;
+
+            foreach (string file in Directory.GetFiles(folder, "Bypass2026_*.ini"))
+            {
+                try
+                {
+                    if (DateTime.UtcNow - File.GetLastWriteTimeUtc(file) > TimeSpan.FromDays(1))
+                        File.Delete(file);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        private static void DeleteBypassLater(string file)
+        {
+            // Best effort only; a closed ModelCreator process cannot finish this task.
+            Task.Delay(StartupGracePeriod).ContinueWith(_ =>
+            {
+                try { if (File.Exists(file)) File.Delete(file); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }, TaskScheduler.Default);
+        }
 
         public string GetDestination(string modelName)
         {
@@ -112,7 +145,9 @@ namespace ModelCreator.Services
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ModelCreator");
             Directory.CreateDirectory(configFolder);
-            string bypassPath = Path.Combine(configFolder, "Bypass2026.ini");
+            CleanOldBypassFiles(configFolder);
+            string bypassPath = Path.Combine(configFolder,
+                "Bypass2026_" + Guid.NewGuid().ToString("N") + ".ini");
             File.WriteAllLines(bypassPath, new[]
             {
                 "set XS_DEFAULT_ENVIRONMENT=" + envPath,
@@ -131,7 +166,20 @@ namespace ModelCreator.Services
                 WorkingDirectory = Path.GetDirectoryName(executable)
             };
 
-            Process.Start(startInfo);
+            try
+            {
+                Process process = Process.Start(startInfo);
+                if (process == null)
+                    throw new InvalidOperationException("Tekla did not start.");
+                DeleteBypassLater(bypassPath);
+            }
+            catch
+            {
+                try { File.Delete(bypassPath); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+                throw;
+            }
         }
     }
 }
