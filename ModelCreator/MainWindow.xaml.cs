@@ -198,12 +198,12 @@ namespace ModelCreator
                     {
                         child.Kill();
                         child.WaitForExit();
-                        return "WAIT\\nTekla API connection attempt timed out.";
+                        return "WAIT\nTekla API connection attempt timed out.";
                     }
                 }
                 return File.Exists(resultFile)
                     ? File.ReadAllText(resultFile)
-                    : "ERROR\\nTekla API helper exited without reporting a result.";
+                    : "ERROR\nTekla API helper exited without reporting a result.";
             }
             finally
             {
@@ -215,7 +215,7 @@ namespace ModelCreator
 
         private static string QuoteArg(string value)
         {
-            return "\\\"" + value.Replace("\\\"", "\\\\\\\"") + "\\\"";
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
 
         private async void ProjectTimer_Tick(object sender, EventArgs e)
@@ -239,7 +239,7 @@ namespace ModelCreator
                 // connections cannot be cached across subsequent attempts.
                 string result = await Task.Run(() => ProbeProjectProperties(
                     _expectedModelPath, _pendingContract, _pendingProject));
-                string[] lines = result.Split(new[] { '\\n' }, 2);
+                string[] lines = result.Split(new[] { '\n' }, 2);
                 string outcome = lines[0].Trim();
                 string diagnostic = lines.Length > 1 ? lines[1].Trim() : result;
                 _lastDiagnostic = diagnostic;
