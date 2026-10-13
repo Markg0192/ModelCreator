@@ -162,6 +162,68 @@ namespace ModelCreator
             }
         }
 
+        private async void TestSharingButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_projectTimer != null && _projectTimer.IsEnabled)
+            {
+                StatusMessage.Text = "Wait until model creation finishes before starting sharing.";
+                return;
+            }
+
+            TestSharingButton.IsEnabled = false;
+            try
+            {
+                string name = ModelNaming.ValidateAndBuild(
+                    ContractNumberInput.Text, ProjectNameInput.Text);
+                string path = _launcher.GetDestination(name);
+                string code = ContractNumberInput.Text.Trim().ToUpperInvariant();
+                string description = ProjectNameInput.Text.Trim();
+
+                string diagnostic;
+                string connectedPath = TeklaProjectProperties.GetConnectedModelPath(out diagnostic);
+                if (connectedPath == null)
+                    throw new InvalidOperationException(diagnostic);
+
+                string expected = Path.GetFullPath(path).TrimEnd(
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (!string.Equals(connectedPath, expected, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Wrong model open. Connected: " +
+                        connectedPath + " | Expected: " + expected + ". No changes made.");
+
+                if (MessageBox.Show(
+                    "Start Tekla Model Sharing for the currently open model?\\n\\n" +
+                    connectedPath + "\\n\\nCode: " + code +
+                    "\\nDescription: " + description +
+                    "\\n\\nThis uploads the model to the Tekla Model Sharing cloud service " +
+                    "and makes you its Owner. No users will be invited automatically.\\n\\nContinue?",
+                    "Confirm start sharing", MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                {
+                    StatusMessage.Text = "Start sharing cancelled.";
+                    return;
+                }
+
+                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                StatusMessage.Text = "Starting Tekla Model Sharing. Uploading model; please wait...";
+                string outcome = await TeklaModelSharing.StartAsync(path, code, description);
+                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
+                StatusMessage.Text = outcome;
+                MessageBox.Show(outcome, "Tekla Model Sharing", MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                StatusMessage.Text = "Model Sharing test failed: " + ex.Message;
+                MessageBox.Show(StatusMessage.Text, "Tekla Model Sharing", MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            finally
+            {
+                TestSharingButton.IsEnabled = true;
+            }
+        }
+
         private void StopProjectTimer()
         {
             if (_projectTimer != null)
