@@ -44,12 +44,14 @@ namespace ModelCreator
                 string path = _launcher.GetDestination(name);
                 if (MessageBox.Show(
                     "Create the following Tekla Structures 2026 model?\n\n" +
-                    name + "\n\n" + path,
+                    name + "\n\n" + path + "\n\nLicence: " +
+                    ((ComboBoxItem)LicenseSelector.SelectedItem).Content,
                     "Confirm model creation",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
 
-                _launcher.Launch(name);
+                string license = ((ComboBoxItem)LicenseSelector.SelectedItem).Tag.ToString();
+                _launcher.Launch(name, license);
                 StatusMessage.Foreground =
                     System.Windows.Media.Brushes.DarkGreen;
                 StatusMessage.Text =
