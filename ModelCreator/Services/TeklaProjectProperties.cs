@@ -6,9 +6,7 @@ namespace ModelCreator.Services
 {
     internal static class TeklaProjectProperties
     {
-        // Never update properties unless the connected model path matches the requested model.
-        public static bool TryApply(string expectedPath, string contractNumber,
-            string projectName, out string diagnostic)
+        public static string GetConnectedModelPath(out string diagnostic)
         {
             diagnostic = "Attempting to connect to Tekla...";
             Model model = new Model();
@@ -16,19 +14,30 @@ namespace ModelCreator.Services
             if (!model.GetConnectionStatus())
             {
                 diagnostic = "Tekla API connection not ready (GetConnectionStatus is false). " +
-                             "The model may be open in a different Tekla instance.";
-                return false;
+                             "Check that a model is open and that the API is connecting to the expected Tekla instance.";
+                return null;
             }
 
-            ModelInfo modelInfo = model.GetInfo();
-            if (modelInfo == null || string.IsNullOrWhiteSpace(modelInfo.ModelPath))
+            ModelInfo info = model.GetInfo();
+            if (info == null || string.IsNullOrWhiteSpace(info.ModelPath))
             {
-                diagnostic = "Connected to Tekla, but the model path is not yet available.";
-                return false;
+                diagnostic = "Connected to Tekla, but the model path is not available.";
+                return null;
             }
 
-            string actual = Path.GetFullPath(modelInfo.ModelPath)
+            diagnostic = "Connected to Tekla model: " + info.ModelPath;
+            return Path.GetFullPath(info.ModelPath)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        // Never update properties unless the connected model path matches the requested model.
+        public static bool TryApply(string expectedPath, string contractNumber,
+            string projectName, out string diagnostic)
+        {
+            string actual = GetConnectedModelPath(out diagnostic);
+            if (actual == null)
+                return false;
+
             string expected = Path.GetFullPath(expectedPath)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -40,6 +49,28 @@ namespace ModelCreator.Services
             }
 
             diagnostic = "Correct model detected. Applying project properties...";
+            Model model = new Model();
+            if (!model.GetConnectionStatus())
+            {
+                diagnostic = "Tekla connection was lost before applying project properties.";
+                return false;
+            }
+
+            ModelInfo confirmedInfo = model.GetInfo();
+            if (confirmedInfo == null || string.IsNullOrWhiteSpace(confirmedInfo.ModelPath))
+            {
+                diagnostic = "Could not confirm the connected model before writing.";
+                return false;
+            }
+
+            string confirmedPath = Path.GetFullPath(confirmedInfo.ModelPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!string.Equals(confirmedPath, expected, StringComparison.OrdinalIgnoreCase))
+            {
+                diagnostic = "The connected model changed before writing. No changes made.";
+                return false;
+            }
+
             ProjectInfo project = model.GetProjectInfo();
             if (project == null)
                 throw new InvalidOperationException("Tekla returned no project properties.");
