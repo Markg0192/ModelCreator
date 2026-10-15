@@ -91,7 +91,13 @@ namespace ModelCreator.Services
                                 report.Add("Project: " + ((string)detail["name"] ?? "(unnamed)") +
                                     "; accountId=" + (accountId ?? "(unavailable)") +
                                     "; licenseId=" + (licenseId ?? "(unavailable)") +
-                                    "; license=" + (license ?? "(unavailable)"));
+                                    "; license=" + (license ?? "(unavailable)") +
+                                    "; licence-related fields: " + string.Join(", ",
+                                        detail.Properties().Where(p =>
+                                            p.Name.IndexOf("licen", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                            p.Name.IndexOf("account", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                            p.Name.IndexOf("entitle", StringComparison.OrdinalIgnoreCase) >= 0)
+                                            .Select(p => p.Name)));
                         }
                     }
                     return report.Count == 0
