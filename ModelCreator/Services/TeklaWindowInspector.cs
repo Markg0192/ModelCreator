@@ -46,6 +46,61 @@ namespace ModelCreator.Services
             {
                 lines.Add("UI Automation failed: " + ex.GetType().Name + ": " + ex.Message);
             }
+            // A collaboration dialog may be hosted by another process (WebView or
+            // companion executable). Inventory visible desktop windows so that
+            // we can identify its actual owner without dumping unrelated controls.
+            lines.Add("Visible desktop window inventory (title, PID, executable only):");
+            try
+            {
+                AutomationElementCollection allWindows = AutomationElement.RootElement.FindAll(
+                    TreeScope.Children, Condition.TrueCondition);
+                int shown = 0;
+                foreach (AutomationElement candidate in allWindows)
+                {
+                    if (shown >= 60) break;
+                    try
+                    {
+                        string title = candidate.Current.Name ?? "";
+                        if (string.IsNullOrWhiteSpace(title) ||
+                            candidate.Current.IsOffscreen) continue;
+                        int id = candidate.Current.ProcessId;
+                        string exe;
+                        try
+                        {
+                            using (Process proc = Process.GetProcessById(id))
+                                exe = proc.ProcessName;
+                        }
+                        catch (ArgumentException) { exe = "(exited)"; }
+                        bool relevant = Contains(title, "collaboration") ||
+                            Contains(title, "trimble") || Contains(title, "connect") ||
+                            Contains(title, "project") || Contains(exe, "tekla") ||
+                            Contains(exe, "trimble");
+                        if (!relevant) continue;
+                        lines.Add("  PID=" + id + " process=" + exe +
+                            " title='" + Clip(title) + "'");
+                        shown++;
+                        // Expand only likely collaboration windows from a process
+                        // other than the main Tekla process.
+                        if (!pids.Contains(id) &&
+                            (Contains(title, "collaboration") ||
+                             Contains(title, "trimble connect") ||
+                             Contains(title, "new project")))
+                        {
+                            int seen = 0, matches = 0;
+                            Walk(candidate, lines, 0, ref seen, ref matches);
+                            lines.Add("  Controls visited=" + seen +
+                                " matching=" + matches);
+                        }
+                    }
+                    catch (ElementNotAvailableException) { }
+                    catch (InvalidOperationException) { }
+                }
+            }
+            catch (Exception ex)
+            {
+                lines.Add("Desktop inventory unavailable: " +
+                    ex.GetType().Name + ": " + ex.Message);
+            }
             lines.Add("Tip: Keep the Start collaboration dialog visible in Tekla " +
                 "during inspection; if no dialog appears, open the File menu or " +
                 "Trimble Connect ribbon and inspect again.");
