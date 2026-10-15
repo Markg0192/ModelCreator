@@ -20,9 +20,12 @@ namespace ModelCreator.Services
         private const string Redirect = "http://localhost";
         private const string ListenerPrefix = "http://localhost/";
         private const string BaseUrl = "https://id.trimble.com";
+        private static string _sessionAccessToken;
 
         internal static async Task<string> LoginAsync()
         {
+            if (!string.IsNullOrWhiteSpace(_sessionAccessToken))
+                return _sessionAccessToken;
             string verifier = Base64Url(RandomBytes(48));
             string state = Base64Url(RandomBytes(24));
             string challenge;
@@ -85,7 +88,13 @@ namespace ModelCreator.Services
                     code = parameters.ContainsKey("code") ? parameters["code"] : null;
                     oauthError = parameters.ContainsKey("error") ? parameters["error"] : null;
 
-                    string html = "<html><body>Trimble sign-in received. You can return to ModelCreator.</body></html>";
+                    // Browser redirect is required by OAuth. Ask the browser to
+                    // close the transient tab; browsers may disallow closing tabs
+                    // which were not opened by JavaScript.
+                    string html = "<!doctype html><html><head><title>Trimble sign-in</title>" +
+                        "<script>window.open('', '_self');window.close();</script></head>" +
+                        "<body style='font:14px Segoe UI,sans-serif;padding:24px'>" +
+                        "Sign-in received. You may close this tab.</body></html>";
                     byte[] body = Encoding.UTF8.GetBytes(html);
                     string headers = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n" +
                         "Content-Length: " + body.Length + "\r\nConnection: close\r\n\r\n";
@@ -121,6 +130,7 @@ namespace ModelCreator.Services
                     string token = (string)JObject.Parse(body)["access_token"];
                     if (string.IsNullOrWhiteSpace(token))
                         throw new InvalidOperationException("Trimble response did not contain an access token.");
+                    _sessionAccessToken = token;
                     return token;
                 }
             }
