@@ -13,6 +13,112 @@ namespace ModelCreator.Services
         private const string EuropeBase = "https://app21.connect.trimble.com/tc/api/2.0/";
         private const string CompanyAccount = "29b87e21-2b12-46e5-aef0-1b1df2958f08";
 
+        // Operates only on an existing uniquely named Europe project. No new project POST.
+        public static async Task<string> AddTestFoldersToExistingProjectAsync(
+            string accessToken, string exactName)
+        {
+            using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
+            {
+                http.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", accessToken);
+                using (var listing = await http.GetAsync(
+                    EuropeBase + "projects?fullyLoaded=false").ConfigureAwait(false))
+                {
+                    if (!listing.IsSuccessStatusCode)
+                        return "BLOCKED: Europe project list HTTP " + (int)listing.StatusCode;
+                    JToken response = JToken.Parse(await listing.Content.ReadAsStringAsync()
+                        .ConfigureAwait(false));
+                    JArray items = response as JArray ?? response["projects"] as JArray ??
+                        response["items"] as JArray;
+                    if (items == null) return "BLOCKED: Unexpected Europe project list.";
+                    var matches = items.Where(p => string.Equals((string)p["name"],
+                        exactName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (matches.Count != 1)
+                        return "BLOCKED: Found " + matches.Count +
+                            " Europe projects named '" + exactName +
+                            "'. Exactly one required to avoid editing the wrong project.";
+                    string id = (string)matches[0]["id"];
+                    if (string.IsNullOrWhiteSpace(id))
+                        return "BLOCKED: Existing project has no ID.";
+                    using (var detailsResponse = await http.GetAsync(
+                        EuropeBase + "projects/" + Uri.EscapeDataString(id)).ConfigureAwait(false))
+                    {
+                        if (!detailsResponse.IsSuccessStatusCode)
+                            return "BLOCKED: Could not verify project, HTTP " +
+                                (int)detailsResponse.StatusCode;
+                        JObject detail = JObject.Parse(await detailsResponse.Content
+                            .ReadAsStringAsync().ConfigureAwait(false));
+                        var licence = detail["license"];
+                        string organization = (string)licence?["orgName"];
+                        string sku = (string)licence?["sku"];
+                        if (!string.Equals(organization, "Severfield plc",
+                            StringComparison.OrdinalIgnoreCase) ||
+                            !string.Equals(sku, "TrimbleConnectBusinessPremium",
+                            StringComparison.OrdinalIgnoreCase))
+                            return "BLOCKED: Existing project licence differs from " +
+                                "Severfield Business Premium. orgName=" + organization +
+                                ", sku=" + sku + ". No folders created.";
+
+                        string rootId = (string)detail["rootFolderId"] ??
+                            (string)detail["rootFolder"]?["id"] ??
+                            (string)detail["rootId"];
+                        if (string.IsNullOrWhiteSpace(rootId))
+                            return "BLOCKED: Found the verified Severfield project '" +
+                                exactName + "' (ID " + id +
+                                "), but project details did not expose rootFolderId. " +
+                                "Available project fields: " +
+                                string.Join(", ", detail.Properties().Select(x => x.Name)) +
+                                ". No folder creation attempted.";
+                        var report = new StringBuilder();
+                        report.AppendLine("Verified Europe project: " + exactName + " (" + id + ")");
+                        report.AppendLine("Verified licence: " + organization + " / " + sku);
+                        report.AppendLine("Root folder ID: " + rootId);
+                        foreach (string folder in new[] { "test 1", "test 2" })
+                        {
+                            // Each POST is sent at most once; an ambiguous response
+                            // is reported for manual inspection, never retried.
+                            var payload = new JObject
+                            {
+                                ["name"] = folder,
+                                ["parentId"] = rootId,
+                                ["projectId"] = id
+                            };
+                            try
+                            {
+                                using (var json = new StringContent(payload.ToString(),
+                                    Encoding.UTF8, "application/json"))
+                                using (var created = await http.PostAsync(
+                                    EuropeBase + "folders", json).ConfigureAwait(false))
+                                {
+                                    string result = await created.Content.ReadAsStringAsync()
+                                        .ConfigureAwait(false);
+                                    if (!created.IsSuccessStatusCode)
+                                    {
+                                        report.AppendLine(folder + ": HTTP " +
+                                            (int)created.StatusCode + "; " +
+                                            result.Substring(0, Math.Min(250, result.Length)));
+                                        report.AppendLine("STOPPED; inspect project folders " +
+                                            "before trying again.");
+                                        break;
+                                    }
+                                    report.AppendLine(folder + ": POST accepted, HTTP " +
+                                        (int)created.StatusCode);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                report.AppendLine(folder + ": outcome uncertain (" +
+                                    ex.GetType().Name + ": " + ex.Message + "). " +
+                                    "Check Connect before retrying.");
+                                break;
+                            }
+                        }
+                        return report.ToString();
+                    }
+                }
+            }
+        }
+
         // Called only after project creation has returned a verified Europe rootFolderId.
         // Never create folders if a project/region cannot be confirmed.
         public static async Task CreateTestFoldersAsync(string accessToken, string rootFolderId)
