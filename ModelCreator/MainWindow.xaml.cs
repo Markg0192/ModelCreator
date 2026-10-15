@@ -175,41 +175,75 @@ namespace ModelCreator
                 StatusMessage.Text = "Wait for model setup to finish.";
                 return;
             }
-
             ConnectTestButton.IsEnabled = false;
             try
             {
                 string modelName = ModelNaming.ValidateAndBuild(
                     ContractNumberInput.Text, ProjectNameInput.Text);
-                MessageBox.Show(
-                    "After clicking OK, ModelCreator will minimize and watch for 20 seconds. You have time " +
-                    "to switch to Tekla and reopen File > Trimble Connect > Start collaboration. " +
-                    "Leave the 'Trimble Connector - Select project' dialog visible. " +
-                    "ModelCreator will capture the window without taking focus.",
-                    "Delayed Tekla dialog inspection",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                string expected = Path.GetFullPath(_launcher.GetDestination(modelName))
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string diag;
+                string actual = TeklaProjectProperties.GetConnectedModelPath(out diag);
+                if (actual == null || !string.Equals(actual, expected,
+                    StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Open Tekla model does not match " +
+                        modelName + ". " + (actual ?? diag) + ". Nothing created.");
+
+                MessageBoxResult approval = MessageBox.Show(
+                    "Create and link the Trimble Connect project '" + modelName +
+                    "' using Tekla's existing Connector dialog?\n\n" +
+                    "Only proceed if this model has no Connect project linked. " +
+                    "ModelCreator will minimise. Open File > Trimble Connect > " +
+                    "Start collaboration, select the new project name, Europe, and " +
+                    "Severfield plc (TrimbleConnectBusinessPremium).\n\n" +
+                    "The application will check the selections and press Create ONCE " +
+                    "if they match. A failed or unclear result will not be retried.",
+                    "Confirm Trimble Connect project creation",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (approval != MessageBoxResult.Yes) return;
+
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Watching for Tekla collaboration dialog for 20 seconds...";
+                StatusMessage.Text = "Waiting for Trimble Connector...";
                 WindowState = WindowState.Minimized;
-                string report = await Task.Run(() =>
-                    TeklaNativeDialogInspector.WatchForDialog(TimeSpan.FromSeconds(20)));
+                string result = await Task.Run(() =>
+                {
+                    DateTime deadline = DateTime.UtcNow.AddSeconds(30);
+                    string last = "WAIT: Dialog not found.";
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        try
+                        {
+                            last = TrimbleConnectorAutomation.InspectSelection(modelName);
+                            if (last.StartsWith("READY\n", StringComparison.Ordinal))
+                                return TrimbleConnectorAutomation.CreateIfVerified(modelName);
+                            if (last.StartsWith("CHECK\n", StringComparison.Ordinal))
+                                return "BLOCKED\n" + last;
+                        }
+                        catch (Exception ex)
+                        {
+                            return "BLOCKED\n" + ex.GetType().Name + ": " + ex.Message;
+                        }
+                        System.Threading.Thread.Sleep(250);
+                    }
+                    return "BLOCKED\n" + last +
+                        "\nNo Create action was sent.";
+                });
                 WindowState = WindowState.Normal;
                 Activate();
-                StatusMessage.Text = "Delayed Tekla dialog inspection complete. Copy the report.";
-                new ConnectDiagnosticsWindow(
-                    "Tekla 2026 window and control inspection",
-                    report + "\n\nRead-only inspection: no buttons were pressed or " +
-                    "cloud projects created. Open the Trimble Connect dialog " +
-                    "manually before running this test to capture its controls.")
+                StatusMessage.Text = result.StartsWith("SUBMITTED\n",
+                    StringComparison.Ordinal)
+                    ? "Trimble Connect creation submitted. Verify linking inside Tekla."
+                    : "Trimble Connect creation blocked; read diagnostics.";
+                new ConnectDiagnosticsWindow("Trimble Connector project creation", result)
                 { Owner = this }.ShowDialog();
             }
             catch (Exception ex)
             {
                 WindowState = WindowState.Normal;
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Tekla inspection: " + ex.Message;
-                MessageBox.Show(StatusMessage.Text, "Tekla control inspection",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                StatusMessage.Text = ex.Message;
+                MessageBox.Show(ex.Message, "Trimble Connect", MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
             finally
             {
