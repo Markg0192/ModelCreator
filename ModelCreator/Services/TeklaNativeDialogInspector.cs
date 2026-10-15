@@ -20,6 +20,41 @@ namespace ModelCreator.Services
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr handle, StringBuilder text, int max);
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
 
+        internal static string WatchForDialog(TimeSpan duration)
+        {
+            var observations = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var deadline = DateTime.UtcNow.Add(duration);
+            while (DateTime.UtcNow < deadline)
+            {
+                bool found = false;
+                EnumWindows((hwnd, unused) =>
+                {
+                    string name = WindowText(hwnd);
+                    if (!IsWindowVisible(hwnd) || string.IsNullOrEmpty(name))
+                        return true;
+                    if (name.IndexOf("Trimble Connector", StringComparison.OrdinalIgnoreCase) < 0 &&
+                        name.IndexOf("Select project", StringComparison.OrdinalIgnoreCase) < 0)
+                        return true;
+                    uint pid;
+                    GetWindowThreadProcessId(hwnd, out pid);
+                    string info = "HWND=0x" + hwnd.ToInt64().ToString("X") +
+                        " PID=" + pid + " class=" + ClassName(hwnd) + " title=" + name;
+                    if (seen.Add(info)) observations.Add(info);
+                    found = true;
+                    return true;
+                }, IntPtr.Zero);
+                if (found)
+                    return "Dialog observed during background watch.\n" +
+                        string.Join("\n", observations) + "\n\n" + Inspect();
+                System.Threading.Thread.Sleep(200);
+            }
+            return "No window titled 'Trimble Connector' or 'Select project' " +
+                "was found during the " + duration.TotalSeconds +
+                "-second background watch. Ensure the dialog opens while " +
+                "ModelCreator remains minimised. No project created.";
+        }
+
         internal static string Inspect()
         {
             var lines = new List<string>();
