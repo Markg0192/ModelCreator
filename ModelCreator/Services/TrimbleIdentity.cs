@@ -32,7 +32,8 @@ namespace ModelCreator.Services
             // port/path unless Trimble confirms that URL is registered.
             // A normal TCP listener avoids Windows HTTP.sys URL ACL permissions.
             // Port 80 matches the registered http://localhost callback.
-            using (var listener = new TcpListener(IPAddress.IPv6Any, 80))
+            var listener = new TcpListener(IPAddress.IPv6Any, 80);
+            try
             {
                 listener.Server.DualMode = true; // accepts localhost over IPv4 or IPv6
                 try
@@ -78,10 +79,10 @@ namespace ModelCreator.Services
                         throw new InvalidOperationException("Invalid Trimble callback request.");
 
                     var callbackUri = new Uri("http://localhost" + segments[1]);
-                    var parameters = System.Web.HttpUtility.ParseQueryString(callbackUri.Query);
-                    returnedState = parameters["state"];
-                    code = parameters["code"];
-                    oauthError = parameters["error"];
+                    var parameters = ParseQuery(callbackUri.Query);
+                    returnedState = parameters.ContainsKey("state") ? parameters["state"] : null;
+                    code = parameters.ContainsKey("code") ? parameters["code"] : null;
+                    oauthError = parameters.ContainsKey("error") ? parameters["error"] : null;
 
                     string html = "<html><body>Trimble sign-in received. You can return to ModelCreator.</body></html>";
                     byte[] body = Encoding.UTF8.GetBytes(html);
@@ -122,6 +123,25 @@ namespace ModelCreator.Services
                     return token;
                 }
             }
+            finally
+            {
+                listener.Stop();
+            }
+        }
+
+        private static Dictionary<string, string> ParseQuery(string query)
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string part in query.TrimStart('?').Split('&'))
+            {
+                if (string.IsNullOrEmpty(part)) continue;
+                string[] pair = part.Split(new[] { '=' }, 2);
+                string key = Uri.UnescapeDataString(pair[0].Replace("+", " "));
+                string value = pair.Length == 2
+                    ? Uri.UnescapeDataString(pair[1].Replace("+", " ")) : "";
+                result[key] = value;
+            }
+            return result;
         }
 
         private static byte[] RandomBytes(int length)
