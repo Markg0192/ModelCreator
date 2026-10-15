@@ -200,14 +200,15 @@ namespace ModelCreator
                         await TrimbleLicenseDiscovery.InspectAsync(token) + "\n\n" +
                         await TrimbleConnectProjects.InspectProjectOwnershipAsync(token) : auth;
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = outcome;
-                MessageBox.Show("Open model confirmed: " + connected +
-                    "\n\nProject name: " + name +
-                    "\nRegion: Europe" +
-                    "\nOwnership: Severfield plc — TrimbleConnectBusinessPremium" +
-                    "\n\n" + outcome,
-                    "Trimble Connect API test", MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                StatusMessage.Text = "Trimble Connect diagnostic complete. See results window.";
+                new ConnectDiagnosticsWindow(
+                    "Open model: " + name + " | Region: Europe | Read-only API inspection",
+                    "Connected Tekla model: " + connected +
+                    "\nProject name: " + name +
+                    "\nServer: Europe" +
+                    "\nExpected licence: Severfield plc — TrimbleConnectBusinessPremium" +
+                    "\n\n" + outcome)
+                { Owner = this }.ShowDialog();
             }
             catch (Exception ex)
             {
