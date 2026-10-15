@@ -212,23 +212,54 @@ namespace ModelCreator
                 {
                     DateTime deadline = DateTime.UtcNow.AddSeconds(30);
                     string last = "WAIT: Dialog not found.";
+                    DateTime? firstVisible = null;
+                    int readyChecks = 0;
                     while (DateTime.UtcNow < deadline)
                     {
                         try
                         {
                             last = TrimbleConnectorAutomation.InspectSelection(modelName);
-                            if (last.StartsWith("READY\n", StringComparison.Ordinal) ||
-                                last.StartsWith("CHECK\n", StringComparison.Ordinal))
-                                return TrimbleConnectorAutomation.SelectEuropeAndCreate(modelName);
+                            if (last.StartsWith("WAIT:", StringComparison.Ordinal))
+                            {
+                                firstVisible = null;
+                                readyChecks = 0;
+                            }
+                            else
+                            {
+                                if (!firstVisible.HasValue)
+                                    firstVisible = DateTime.UtcNow;
+                                // Let the external Connector populate its dropdowns.
+                                // Two stable positive readings and a 1.5s settling
+                                // period are required before invoking Create once.
+                                if (last.StartsWith("READY\n", StringComparison.Ordinal))
+                                    readyChecks++;
+                                else
+                                    readyChecks = 0;
+                                if (readyChecks >= 2 &&
+                                    DateTime.UtcNow - firstVisible.Value >=
+                                        TimeSpan.FromMilliseconds(1500))
+                                    return TrimbleConnectorAutomation.CreateIfVerified(modelName);
+                            }
+                        }
+                        catch (System.Windows.Automation.ElementNotEnabledException)
+                        {
+                            // The Connect window is still enabling its controls.
+                            readyChecks = 0;
+                        }
+                        catch (System.Windows.Automation.ElementNotAvailableException)
+                        {
+                            readyChecks = 0;
+                            firstVisible = null;
                         }
                         catch (Exception ex)
                         {
                             return "BLOCKED\n" + ex.GetType().Name + ": " + ex.Message;
                         }
-                        System.Threading.Thread.Sleep(250);
+                        System.Threading.Thread.Sleep(300);
                     }
                     return "BLOCKED\n" + menuResult + "\n" + last +
-                        "\nNo Create action was sent.";
+                        "\nThe Connector did not settle on the required settings. " +
+                        "Nothing was created.";
                 });
                 WindowState = WindowState.Normal;
                 Activate();
