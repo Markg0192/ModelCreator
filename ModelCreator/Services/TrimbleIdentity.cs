@@ -17,7 +17,8 @@ namespace ModelCreator.Services
     internal static class TrimbleIdentity
     {
         private const string ClientId = "76f248a9-469b-47c4-81ec-b2cfb1acfe8a";
-        private const string Redirect = "http://localhost/";
+        private const string Redirect = "http://localhost";
+        private const string ListenerPrefix = "http://localhost/";
         private const string BaseUrl = "https://id.trimble.com";
 
         internal static async Task<string> LoginAsync()
