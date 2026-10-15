@@ -64,7 +64,7 @@
             <Button x:Name="RetryPropertiesButton" Content="Apply to Open Model"
                     MinWidth="175" Height="36" Padding="12,6" Margin="0,0,12,0"
                     Click="RetryPropertiesButton_Click"/>
-            <Button x:Name="ConnectTestButton" Content="Open Tekla Connect"
+            <Button x:Name="ConnectTestButton" Content="Inspect Tekla UI"
                     MinWidth="165" Height="36" Padding="12,6" Margin="0,0,12,0"
                     Click="ConnectTestButton_Click"/>
             <Button x:Name="CreateButton" Content="Create Model"
