@@ -18,26 +18,26 @@ namespace ModelCreator.Services
             lines.Add("Tekla UI inspection (read-only)");
             lines.Add("Expected model: " + expectedModelName);
             lines.Add("Tekla processes found: " + processes.Length);
-            foreach (Process process in processes.Take(5))
+            var processIds = new HashSet<int>(processes.Select(p => p.Id));
+            try
             {
-                lines.Add("Process PID " + process.Id);
-                try
+                var windows = AutomationElement.RootElement.FindAll(
+                    TreeScope.Children, Condition.TrueCondition);
+                foreach (AutomationElement window in windows)
                 {
-                    AutomationElement window = AutomationElement.FromHandle(process.MainWindowHandle);
-                    if (window == null)
-                    {
-                        lines.Add("  No accessible main window (Tekla may still be starting).");
-                        continue;
-                    }
-                    lines.Add("  Window: " + SafeName(window));
-                    var count = 0;
+                    int pid;
+                    try { pid = window.Current.ProcessId; }
+                    catch (ElementNotAvailableException) { continue; }
+                    if (!processIds.Contains(pid)) continue;
+                    lines.Add("Window PID " + pid + ": " + SafeName(window));
+                    int count = 0;
                     Walk(window, lines, 0, ref count);
                 }
-                catch (Exception ex)
-                {
-                    lines.Add("  UI Automation unavailable: " + ex.GetType().Name +
-                        ": " + ex.Message);
-                }
+            }
+            catch (Exception ex)
+            {
+                lines.Add("UI Automation unavailable: " + ex.GetType().Name +
+                    ": " + ex.Message);
             }
             if (processes.Length == 0)
                 lines.Add("Tekla is not running. Open the test model first.");
