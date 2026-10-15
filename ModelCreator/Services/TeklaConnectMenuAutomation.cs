@@ -63,16 +63,25 @@ namespace ModelCreator.Services
             {
                 try
                 {
-                    // The ribbon has a separate Custom element also named
-                    // "Trimble Connect". Only a backstage MenuItem is valid here.
+                    // Tekla backstage entries are often Text or Custom controls,
+                    // NOT standard MenuItem controls. Anchor the search to the
+                    // visible File menu's vertical panel, never the ribbon tab.
+                    var menuLabel = root.FindFirst(TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.NameProperty, "Modeling"));
                     var matches = root.FindAll(TreeScope.Descendants,
-                        new AndCondition(
-                            new PropertyCondition(AutomationElement.NameProperty,
-                                name, PropertyConditionFlags.IgnoreCase),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty,
-                                ControlType.MenuItem)));
+                        new PropertyCondition(AutomationElement.NameProperty, name,
+                            PropertyConditionFlags.IgnoreCase));
                     foreach (AutomationElement item in matches)
-                        if (IsUsable(item, true)) return item;
+                    {
+                        if (!IsUsable(item, true)) continue;
+                        var rect = item.Current.BoundingRectangle;
+                        if (rect.Left < 0 || rect.Left > 360 || rect.Top < 0)
+                            continue;
+                        if (item.Current.ControlType == ControlType.Text ||
+                            item.Current.ControlType == ControlType.MenuItem ||
+                            item.Current.ControlType == ControlType.ListItem)
+                            return item;
+                    }
                 }
                 catch (ElementNotAvailableException) { }
                 catch (InvalidOperationException) { }
