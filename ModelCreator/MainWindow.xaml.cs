@@ -87,7 +87,7 @@ namespace ModelCreator
                 _sharingAttempted = false;
                 _connectAttempted = false;
                 _connectCompleted = false;
-                _projectDeadline = DateTime.UtcNow.AddMinutes(5);
+                _projectDeadline = DateTime.UtcNow.AddMinutes(12);
 
                 _projectTimer = new DispatcherTimer(DispatcherPriority.Background)
                 {
@@ -97,7 +97,7 @@ namespace ModelCreator
                 _projectTimer.Start();
 
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                StatusMessage.Text = "Tekla launched. Waiting for the new model to open...";
+                StatusMessage.Text = "Stage 1/5: Tekla launched. Waiting for the new model to open...";
             }
             catch (Exception ex)
             {
@@ -552,7 +552,7 @@ namespace ModelCreator
             {
                 StopProjectTimer();
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Model setup did not finish within five minutes. " +
+                StatusMessage.Text = "Model setup did not finish within twelve minutes. " +
                     "Last check: " + _lastDiagnostic;
                 return;
             }
