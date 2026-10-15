@@ -184,127 +184,17 @@ namespace ModelCreator.Services
                                 break;
                             }
                         }
-                        if (invitees != null && invitees.Count > 0 &&
-                            report.ToString().Contains("test 1: POST accepted") &&
-                            report.ToString().Contains("test 2: POST accepted"))
+                        if (invitees != null && invitees.Count > 0)
                         {
-                            // Same verified Europe project ID as the folders. Owner maps
-                            // to ADMIN; all other Tekla roles map to USER.
-                            // Send one request only; API errors or ambiguous replies
-                            // must never cause automatic duplicate invitations.
-                            // Documented Core Account API expects an array of
-                            // project update jobs (not an array of bare users).
-                            // Each job can contain a maximum of 15 user updates.
-                            if (invitees.Count > 15)
-                            {
-                                report.AppendLine("CONNECT INVITES FAILED: Maximum 15 users per request. " +
-                                    "No invitations submitted.");
-                                return report.ToString();
-                            }
-                            var updates = new JArray(invitees.Select(user => new JObject
-                            {
-                                ["action"] = "ADD",
-                                ["email"] = user.Email,
-                                ["role"] = user.Role == "Owner" ? "ADMIN" : "USER"
-                            }));
-                            var members = new JArray(new JObject
-                            {
-                                ["projectId"] = id,
-                                ["updates"] = updates
-                            });
-                            // The account-management service is distinct from the
-                            // Europe project service. It may lag project creation, or
-                            // the authenticated user may lack account admin access.
-                            // Confirm the new project exists THERE before its one
-                            // and only membership update request.
-                            bool accountVisible = false;
-                            string accountDiagnostic = "";
-                            for (int check = 0; check < 8; check++)
-                            {
-                                using (var ownership = await http.GetAsync(
-                                    "https://ecom.connect.trimble.com/v1/accounts/" +
-                                    Uri.EscapeDataString(CompanyAccount) +
-                                    "/projects?size=100&page=1").ConfigureAwait(false))
-                                {
-                                    string ownershipBody = await ownership.Content
-                                        .ReadAsStringAsync().ConfigureAwait(false);
-                                    if (!ownership.IsSuccessStatusCode)
-                                    {
-                                        accountDiagnostic = "Account projects HTTP " +
-                                            (int)ownership.StatusCode + " " +
-                                            ownershipBody.Substring(0,
-                                                Math.Min(240, ownershipBody.Length));
-                                        break;
-                                    }
-                                    try
-                                    {
-                                        JToken accountJson = JToken.Parse(ownershipBody);
-                                        var accountProjects = accountJson as JArray ??
-                                            accountJson["content"] as JArray ??
-                                            accountJson["projects"] as JArray ??
-                                            accountJson["items"] as JArray ??
-                                            accountJson["data"] as JArray;
-                                        if (accountProjects == null)
-                                        {
-                                            accountDiagnostic = "Unknown account project list shape. " +
-                                                "Fields: " + string.Join(", ",
-                                                    (accountJson as JObject)?.Properties()
-                                                        .Select(x => x.Name) ??
-                                                    Enumerable.Empty<string>());
-                                            break;
-                                        }
-                                        accountVisible = accountProjects.Any(x =>
-                                            string.Equals((string)x["id"], id,
-                                                StringComparison.OrdinalIgnoreCase) ||
-                                            string.Equals((string)x["projectId"], id,
-                                                StringComparison.OrdinalIgnoreCase));
-                                        accountDiagnostic = accountVisible
-                                            ? "Project verified in Connect account service."
-                                            : "Project not yet visible in Connect account service.";
-                                    }
-                                    catch (Exception parseEx)
-                                    {
-                                        accountDiagnostic = "Account project response: " +
-                                            parseEx.GetType().Name + ": " + parseEx.Message;
-                                        break;
-                                    }
-                                }
-                                if (accountVisible) break;
-                                if (check < 7) await Task.Delay(2000).ConfigureAwait(false);
-                            }
-                            if (!accountVisible)
-                            {
-                                report.AppendLine("CONNECT INVITES NOT SENT: " +
-                                    accountDiagnostic + " Check account administrator access " +
-                                    "and project synchronization. No membership POST attempted.");
-                                return report.ToString();
-                            }
-                            try
-                            {
-                                using (var body = new StringContent(
-                                    members.ToString(), Encoding.UTF8, "application/json"))
-                                using (var responseInvite = await http.PostAsync(
-                                    "https://projects-api.connect.trimble.com/v1/projects/update-users", body).ConfigureAwait(false))
-                                {
-                                    string inviteBody = await responseInvite.Content
-                                        .ReadAsStringAsync().ConfigureAwait(false);
-                                    if (!responseInvite.IsSuccessStatusCode)
-                                        report.AppendLine("CONNECT INVITES FAILED: HTTP " +
-                                            (int)responseInvite.StatusCode + " " +
-                                            inviteBody.Substring(0, Math.Min(inviteBody.Length, 500)));
-                                    else
-                                        report.AppendLine("CONNECT INVITES SUBMITTED for " +
-                                            invitees.Count + " users (HTTP " +
-                                            (int)responseInvite.StatusCode +
-                                            "). Membership updates are asynchronous; verify completion in Connect.");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                report.AppendLine("CONNECT INVITES UNCERTAIN: " +
-                                    ex.GetType().Name + ": " + ex.Message +
-                                    ". Verify memberships before retrying.");
-                            }
+                            // Account-level membership API returned 403 for the
+                            // model creator's Trimble Identity. Do not keep calling
+                            // an endpoint requiring Company Admin permissions.
+                            // Creating Tekla Model Sharing invites is independent.
+                            report.AppendLine("CONNECT USERS PENDING: " +
+                                invitees.Count + " additional user(s) not invited to " +
+                                "Trimble Connect. The account-management API requires " +
+                                "Company Admin rights. A Connect project administrator " +
+                                "can invite them from Connect > Team.");
                         }
                         return report.ToString();
                     }
