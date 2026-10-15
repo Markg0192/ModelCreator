@@ -25,38 +25,45 @@ namespace ModelCreator.Services
             var observations = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var deadline = DateTime.UtcNow.Add(duration);
+            var lastConnectorCount = 0;
             while (DateTime.UtcNow < deadline)
             {
                 var connectorPids = new HashSet<uint>();
-                foreach (var p in Process.GetProcessesByName("TrimbleConnector"))
-                    connectorPids.Add((uint)p.Id);
+                foreach (var process in Process.GetProcessesByName("TrimbleConnector"))
+                    connectorPids.Add((uint)process.Id);
+                lastConnectorCount = connectorPids.Count;
                 bool found = false;
                 EnumWindows((hwnd, unused) =>
                 {
-                    string name = WindowText(hwnd);
-                    if (!IsWindowVisible(hwnd) || string.IsNullOrEmpty(name))
-                        return true;
                     uint pid;
                     GetWindowThreadProcessId(hwnd, out pid);
-                    if (!connectorPids.Contains(pid) &&
-                        name.IndexOf("Trimble Connector", StringComparison.OrdinalIgnoreCase) < 0 &&
-                        name.IndexOf("Select project", StringComparison.OrdinalIgnoreCase) < 0)
-                        return true;
+                    string title = WindowText(hwnd);
+                    bool connectorOwned = connectorPids.Contains(pid);
+                    bool titled = title.IndexOf("Trimble Connector",
+                        StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        title.IndexOf("Select project", StringComparison.OrdinalIgnoreCase) >= 0;
+                    // A connector-owned WPF window can have an empty native title.
+                    if (!connectorOwned && !titled) return true;
+                    bool visible = IsWindowVisible(hwnd);
                     string info = "HWND=0x" + hwnd.ToInt64().ToString("X") +
-                        " PID=" + pid + " class=" + ClassName(hwnd) + " title=" + name;
+                        " PID=" + pid + " visible=" + visible +
+                        " class=" + ClassName(hwnd) + " title='" + title + "'";
                     if (seen.Add(info)) observations.Add(info);
-                    found = true;
+                    if (connectorOwned && visible) found = true;
+                    if (titled && visible) found = true;
                     return true;
                 }, IntPtr.Zero);
                 if (found)
-                    return "Dialog observed during background watch.\n" +
+                    return "Connector-owned window detected.\n" +
                         string.Join("\n", observations) + "\n\n" + Inspect();
                 System.Threading.Thread.Sleep(200);
             }
-            return "No window titled 'Trimble Connector' or 'Select project' " +
-                "was found during the " + duration.TotalSeconds +
-                "-second background watch. Ensure the dialog opens while " +
-                "ModelCreator remains minimised. No project created.";
+            return "No visible connector-owned window detected in " +
+                duration.TotalSeconds + " seconds. TrimbleConnector process count=" +
+                lastConnectorCount + ".\nObserved matching windows:\n" +
+                (observations.Count == 0 ? "(none)" :
+                    string.Join("\n", observations)) +
+                "\nNo project created.";
         }
 
         internal static string Inspect()
