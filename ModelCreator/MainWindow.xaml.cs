@@ -168,6 +168,53 @@ namespace ModelCreator
             }
         }
 
+        private async void CreateFoldersButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_projectTimer != null && _projectTimer.IsEnabled)
+            {
+                StatusMessage.Text = "Wait until model setup finishes.";
+                return;
+            }
+            CreateFoldersButton.IsEnabled = false;
+            try
+            {
+                string modelName = ModelNaming.ValidateAndBuild(
+                    ContractNumberInput.Text, ProjectNameInput.Text);
+                string diagnostic;
+                string connected = TeklaProjectProperties.GetConnectedModelPath(out diagnostic);
+                string expected = Path.GetFullPath(_launcher.GetDestination(modelName))
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (connected == null ||
+                    !string.Equals(connected, expected, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Wrong Tekla model is open. " +
+                        (connected ?? diagnostic) + ". Nothing created.");
+
+                if (MessageBox.Show("Create root-level folders 'test 1' and 'test 2' " +
+                    "in the existing Europe Trimble Connect project '" + modelName +
+                    "'?\n\nThis will not create another Connect project. " +
+                    "The project and Severfield Business Premium ownership will be " +
+                    "verified first. Do not repeat after an uncertain result.",
+                    "Confirm test folder creation", MessageBoxButton.YesNo,
+                    MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+                StatusMessage.Text = "Signing in to Trimble Connect to add test folders...";
+                string token = await TrimbleIdentity.LoginAsync();
+                string result = await TrimbleConnectProjects.AddTestFoldersToExistingProjectAsync(
+                    token, modelName);
+                StatusMessage.Text = "Trimble Connect folder test finished. See result window.";
+                new ConnectDiagnosticsWindow("Trimble Connect folder setup", result)
+                { Owner = this }.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                StatusMessage.Text = "Folder setup: " + ex.Message;
+                MessageBox.Show(StatusMessage.Text, "Trimble Connect folders",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally { CreateFoldersButton.IsEnabled = true; }
+        }
+
         private async void ConnectTestButton_Click(object sender, RoutedEventArgs e)
         {
             if (_projectTimer != null && _projectTimer.IsEnabled)
