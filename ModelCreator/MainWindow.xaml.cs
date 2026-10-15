@@ -181,11 +181,22 @@ namespace ModelCreator
             {
                 string modelName = ModelNaming.ValidateAndBuild(
                     ContractNumberInput.Text, ProjectNameInput.Text);
+                MessageBox.Show(
+                    "After clicking OK, ModelCreator will minimize. You have 8 seconds " +
+                    "to switch to Tekla and reopen File > Trimble Connect > Start collaboration. " +
+                    "Leave the 'Trimble Connector - Select project' dialog visible. " +
+                    "ModelCreator will capture the window without taking focus.",
+                    "Delayed Tekla dialog inspection",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Inspecting the currently open Tekla interface...";
-                string report = await Task.Run(() => TeklaWindowInspector.Inspect(modelName) +
-                    "\n\n" + TeklaNativeDialogInspector.Inspect());
-                StatusMessage.Text = "Tekla control inspection complete. Copy the report.";
+                StatusMessage.Text = "Waiting 8 seconds for Tekla dialog...";
+                WindowState = WindowState.Minimized;
+                await Task.Delay(TimeSpan.FromSeconds(8));
+                // Keep this process minimized until the capture completes.
+                string report = await Task.Run(() => TeklaNativeDialogInspector.Inspect());
+                WindowState = WindowState.Normal;
+                Activate();
+                StatusMessage.Text = "Delayed Tekla dialog inspection complete. Copy the report.";
                 new ConnectDiagnosticsWindow(
                     "Tekla 2026 window and control inspection",
                     report + "\n\nRead-only inspection: no buttons were pressed or " +
@@ -195,6 +206,7 @@ namespace ModelCreator
             }
             catch (Exception ex)
             {
+                WindowState = WindowState.Normal;
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
                 StatusMessage.Text = "Tekla inspection: " + ex.Message;
                 MessageBox.Show(StatusMessage.Text, "Tekla control inspection",
