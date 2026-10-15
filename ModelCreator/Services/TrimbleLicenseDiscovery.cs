@@ -46,6 +46,21 @@ namespace ModelCreator.Services
                             if (top != null)
                                 output.AppendLine("  Response fields: " + string.Join(", ",
                                     top.Properties().Select(x => x.Name).Take(35)));
+                            if (top != null)
+                            {
+                                JToken memberships = top["companies"];
+                                JToken primary = top["company"];
+                                output.AppendLine("  Companies field type: " +
+                                    (memberships == null ? "(absent)" : memberships.Type.ToString()));
+                                if (primary != null)
+                                    output.AppendLine("  Primary company: " + SummarizeCompany(primary));
+                                var companyItems = memberships as JArray;
+                                if (companyItems != null)
+                                    foreach (JToken entry in companyItems.Take(12))
+                                        output.AppendLine("  Company membership: " + SummarizeCompany(entry));
+                                else if (memberships is JObject)
+                                    output.AppendLine("  Company membership: " + SummarizeCompany(memberships));
+                            }
                             List<JObject> candidates = new List<JObject>();
                             FindCandidates(root, candidates, 0);
                             if (candidates.Count == 0)
@@ -69,6 +84,21 @@ namespace ModelCreator.Services
             output.AppendLine("No project or folders were created. " +
                 "Only a verified Severfield Business Premium licence ID should be used for creation.");
             return output.ToString();
+        }
+
+        private static string SummarizeCompany(JToken token)
+        {
+            var obj = token as JObject;
+            if (obj == null)
+                return "value format " + (token == null ? "(missing)" : token.Type.ToString());
+            var allowed = new[] { "id", "name", "companyId", "companyName", "accountId",
+                "accountName", "licenseId", "licenseName", "type" };
+            var fields = obj.Properties().Where(p => allowed.Any(a =>
+                string.Equals(a, p.Name, StringComparison.OrdinalIgnoreCase)) &&
+                (p.Value.Type == JTokenType.String || p.Value.Type == JTokenType.Integer))
+                .Select(p => p.Name + "=" + p.Value.ToString()).Take(12).ToList();
+            return fields.Count > 0 ? string.Join(", ", fields) :
+                "field names: " + string.Join(", ", obj.Properties().Select(p => p.Name).Take(15));
         }
 
         private static void FindCandidates(JToken token, List<JObject> result, int depth)
