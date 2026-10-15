@@ -217,10 +217,9 @@ namespace ModelCreator
                         try
                         {
                             last = TrimbleConnectorAutomation.InspectSelection(modelName);
-                            if (last.StartsWith("READY\n", StringComparison.Ordinal))
-                                return TrimbleConnectorAutomation.CreateIfVerified(modelName);
-                            if (last.StartsWith("CHECK\n", StringComparison.Ordinal))
-                                return "BLOCKED\n" + last;
+                            if (last.StartsWith("READY\n", StringComparison.Ordinal) ||
+                                last.StartsWith("CHECK\n", StringComparison.Ordinal))
+                                return TrimbleConnectorAutomation.SelectEuropeAndCreate(modelName);
                         }
                         catch (Exception ex)
                         {
