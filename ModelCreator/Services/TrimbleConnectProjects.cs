@@ -97,12 +97,31 @@ namespace ModelCreator.Services
                                     (string)licenceObject["companyName"];
                                 string entitlement = (string)licenceObject["entitlementId"] ??
                                     (string)licenceObject["productId"];
-                                report.Add("Licence structure in '" +
-                                    ((string)detail["name"] ?? "(unnamed)") + "': fields=" +
-                                    string.Join(", ", licenseFields) +
-                                    "; company/account=" + (licenseAccountName ?? "(not exposed)") +
-                                    "; account ID=" + (licenseAccount ?? "(not exposed)") +
-                                    "; entitlement ID=" + (entitlement ?? "(not exposed)"));
+                                var accountSummaries = new System.Collections.Generic.List<string>();
+                                var accounts = licenceObject["accounts"] as JArray;
+                                if (accounts != null)
+                                {
+                                    foreach (JToken account in accounts.Take(5))
+                                    {
+                                        JObject obj = account as JObject;
+                                        if (obj == null) continue;
+                                        accountSummaries.Add("id=" +
+                                            ((string)obj["id"] ?? "(missing)") +
+                                            ", name=" + ((string)obj["name"] ??
+                                            (string)obj["orgName"] ?? "(missing)"));
+                                    }
+                                }
+                                report.Add("Licence in '" +
+                                    ((string)detail["name"] ?? "(unnamed)") +
+                                    "': id=" + ((string)licenceObject["id"] ?? "(missing)") +
+                                    "; orgName=" + ((string)licenceObject["orgName"] ?? "(missing)") +
+                                    "; subscriptionId=" + ((string)licenceObject["subscriptionId"] ?? "(missing)") +
+                                    "; sku=" + ((string)licenceObject["sku"] ?? "(missing)") +
+                                    "; type=" + ((string)licenceObject["type"] ?? "(missing)") +
+                                    "; accounts=" + (accountSummaries.Count == 0
+                                        ? "(no account identifiers exposed)"
+                                        : string.Join(" | ", accountSummaries)) +
+                                    "; ownerId=" + ((string)licenceObject["ownerId"] ?? "(missing)"));
                             }
                             string accountId = (string)detail["accountId"] ??
                                 (string)detail["account"]?["id"];
