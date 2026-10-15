@@ -60,6 +60,23 @@ namespace ModelCreator
                 return;
             }
 
+            if (e.Args.Length == 3 && e.Args[0] == "--open-connect")
+            {
+                try
+                {
+                    string result = TeklaConnectCollaboration.LaunchRecordedMacro(e.Args[1]);
+                    File.WriteAllText(e.Args[2], result);
+                }
+                catch (Exception ex)
+                {
+                    try { File.WriteAllText(e.Args[2], "ERROR: " + ex.Message); }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+                Shutdown();
+                return;
+            }
+
             base.OnStartup(e);
             MainWindow = new MainWindow();
             MainWindow.Show();
