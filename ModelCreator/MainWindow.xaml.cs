@@ -1,5 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using Newtonsoft.Json;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -24,10 +27,14 @@ namespace ModelCreator
         private bool _sharingAttempted;
         private bool _connectAttempted;
         private bool _connectCompleted;
+        private readonly ObservableCollection<SharingInvitee> _additionalUsers =
+            new ObservableCollection<SharingInvitee>();
+        private List<SharingInvitee> _pendingUsers = new List<SharingInvitee>();
 
         public MainWindow()
         {
             InitializeComponent();
+            SharingUsersGrid.ItemsSource = _additionalUsers;
             UpdatePreview();
         }
 
@@ -48,6 +55,11 @@ namespace ModelCreator
             DestinationPreview.Text = _launcher.GetDestination(name);
             if (_projectTimer == null || !_projectTimer.IsEnabled)
                 StatusMessage.Text = "";
+        }
+
+        private void AddSharingUser_Click(object sender, RoutedEventArgs e)
+        {
+            _additionalUsers.Add(new SharingInvitee { Role = "Editor" });
         }
 
         private void CreateButton_Click(object sender, RoutedEventArgs e)
@@ -75,6 +87,9 @@ namespace ModelCreator
                     return;
                 }
 
+                SharingUsersGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+                SharingUsersGrid.CommitEdit(DataGridEditingUnit.Row, true);
+                _pendingUsers = SharingInvitees.Validate(_additionalUsers);
                 string license = ((ComboBoxItem)LicenseSelector.SelectedItem).Tag.ToString();
                 _launcher.Launch(name, license);
 
@@ -339,8 +354,12 @@ namespace ModelCreator
         {
             string resultFile = Path.Combine(Path.GetTempPath(),
                 "ModelCreatorConnect_" + Guid.NewGuid().ToString("N") + ".txt");
+            string inviteesPath = Path.Combine(Path.GetTempPath(),
+                "ModelCreatorInvitees_" + Guid.NewGuid().ToString("N") + ".json");
             try
             {
+                if (startSharing)
+                    File.WriteAllText(inviteesPath, JsonConvert.SerializeObject(additionalUsers));
                 string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
                 var info = new ProcessStartInfo
                 {
@@ -399,19 +418,24 @@ namespace ModelCreator
         }
 
         private static string ProbeProjectProperties(string expectedPath, string contract,
-            string project, bool startSharing)
+            string project, bool startSharing, List<SharingInvitee> additionalUsers)
         {
             string resultFile = Path.Combine(Path.GetTempPath(),
                 "ModelCreatorProbe_" + Guid.NewGuid().ToString("N") + ".txt");
+            string inviteesPath = Path.Combine(Path.GetTempPath(),
+                "ModelCreatorInvitees_" + Guid.NewGuid().ToString("N") + ".json");
             try
             {
+                if (startSharing)
+                    File.WriteAllText(inviteesPath, JsonConvert.SerializeObject(additionalUsers));
                 string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
                 var info = new ProcessStartInfo
                 {
                     FileName = exe,
                     Arguments = (startSharing ? "--start-sharing " : "--apply-project-properties ") +
                         QuoteArg(expectedPath) + " " +
-                        QuoteArg(contract) + " " + QuoteArg(project) + " " + QuoteArg(resultFile),
+                        QuoteArg(contract) + " " + QuoteArg(project) + " " + QuoteArg(resultFile) +
+                        (startSharing ? " " + QuoteArg(inviteesPath) : ""),
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = Path.GetDirectoryName(exe)
@@ -455,6 +479,9 @@ namespace ModelCreator
             }
             finally
             {
+                try { if (File.Exists(inviteesPath)) File.Delete(inviteesPath); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
                 try { if (File.Exists(resultFile)) File.Delete(resultFile); }
                 catch (IOException) { }
                 catch (UnauthorizedAccessException) { }
@@ -601,7 +628,7 @@ namespace ModelCreator
                     StatusMessage.Text = "Stage 2/5: Connecting and saving project properties...";
                 }
                 string result = await Task.Run(() => ProbeProjectProperties(
-                    _expectedModelPath, _pendingContract, _pendingProject, startSharing));
+                    _expectedModelPath, _pendingContract, _pendingProject, startSharing, _pendingUsers));
                 string[] lines = result.Split(new[] { '\n' }, 2);
                 string outcome = lines[0].Trim();
                 string diagnostic = lines.Length > 1 ? lines[1].Trim() : result;
@@ -621,7 +648,7 @@ namespace ModelCreator
                         StopProjectTimer();
                         StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
                         StatusMessage.Text = "Model created, properties saved, Connect project and test folders created, " +
-                            "and Tekla Model Sharing started.";
+                            "and Tekla Model Sharing started. " + diagnostic;
                     }
                 }
                 else if (outcome == "ERROR")
