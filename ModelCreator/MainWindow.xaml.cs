@@ -22,6 +22,8 @@ namespace ModelCreator
         private bool _projectPropertiesSaved;
         private bool _sharingStarted;
         private bool _sharingAttempted;
+        private bool _connectAttempted;
+        private bool _connectCompleted;
 
         public MainWindow()
         {
@@ -83,6 +85,8 @@ namespace ModelCreator
                 _projectPropertiesSaved = false;
                 _sharingStarted = false;
                 _sharingAttempted = false;
+                _connectAttempted = false;
+                _connectCompleted = false;
                 _projectDeadline = DateTime.UtcNow.AddMinutes(5);
 
                 _projectTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -462,6 +466,83 @@ namespace ModelCreator
             return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
 
+        private async Task<string> RunConnectCreationAndFoldersAsync(string name)
+        {
+            WindowState = WindowState.Minimized;
+            try
+            {
+                string menu = await Task.Run(() =>
+                    TeklaConnectMenuAutomation.OpenCollaboration(name));
+                string submitted = await Task.Run(() =>
+                {
+                    DateTime until = DateTime.UtcNow.AddSeconds(45);
+                    DateTime? firstVisible = null;
+                    int stable = 0;
+                    string last = "WAIT: Connector not visible.";
+                    while (DateTime.UtcNow < until)
+                    {
+                        try
+                        {
+                            last = TrimbleConnectorAutomation.InspectSelection(name);
+                            if (last.StartsWith("WAIT:", StringComparison.Ordinal))
+                            {
+                                stable = 0;
+                                firstVisible = null;
+                            }
+                            else
+                            {
+                                if (!firstVisible.HasValue) firstVisible = DateTime.UtcNow;
+                                stable = last.StartsWith("READY\n", StringComparison.Ordinal)
+                                    ? stable + 1 : 0;
+                                if (stable >= 2 && DateTime.UtcNow - firstVisible.Value >=
+                                    TimeSpan.FromMilliseconds(1500))
+                                    return TrimbleConnectorAutomation.CreateIfVerified(name);
+                            }
+                        }
+                        catch (System.Windows.Automation.ElementNotAvailableException)
+                        { stable = 0; firstVisible = null; }
+                        catch (System.Windows.Automation.ElementNotEnabledException)
+                        { stable = 0; }
+                        System.Threading.Thread.Sleep(300);
+                    }
+                    return "BLOCKED\n" + menu + "\n" + last;
+                });
+                if (!submitted.StartsWith("SUBMITTED\n", StringComparison.Ordinal))
+                    return "CONNECT BLOCKED: " + submitted +
+                        "\nNo Model Sharing attempt made.";
+            }
+            finally
+            {
+                WindowState = WindowState.Normal;
+            }
+
+            // A submitted dialog is not confirmation. Wait for the actual project
+            // to become available before attempting folders or Model Sharing.
+            StatusMessage.Text = "Trimble Connect creation submitted. " +
+                "Waiting for the new cloud project...";
+            string token = await TrimbleIdentity.LoginAsync();
+            string lastResult = "";
+            for (int attempt = 0; attempt < 6; attempt++)
+            {
+                // Only retry read/lookup when the new project isn't visible yet.
+                // The folder write itself is NEVER retried.
+                string lookup = await TrimbleConnectProjects.PreflightAsync(token, name);
+                if (lookup.IndexOf("already uses the name", StringComparison.Ordinal) >= 0)
+                    break;
+                if (attempt == 5)
+                    return "CONNECT UNCERTAIN: New cloud project is not visible yet. " +
+                        "No folders added and Model Sharing not started.";
+                await Task.Delay(2000);
+            }
+            lastResult = await TrimbleConnectProjects.AddTestFoldersToExistingProjectAsync(
+                token, name);
+            if (!lastResult.Contains("test 1: POST accepted") ||
+                !lastResult.Contains("test 2: POST accepted"))
+                return "FOLDER SETUP NOT CONFIRMED: " + lastResult +
+                    "\nCheck Connect before retrying. Model Sharing not started.";
+            return "OK\n" + lastResult;
+        }
+
         private async void ProjectTimer_Tick(object sender, EventArgs e)
         {
             if (_projectProbeRunning)
@@ -481,7 +562,29 @@ namespace ModelCreator
             {
                 // Each attempt runs in a new process so early failed Tekla API
                 // connections cannot be cached across subsequent attempts.
-                bool startSharing = _projectPropertiesSaved;
+                if (_projectPropertiesSaved && !_connectCompleted)
+                {
+                    if (_connectAttempted) return;
+                    _connectAttempted = true;
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                    StatusMessage.Text = "Stage 3/5: Creating Trimble Connect project and folders...";
+                    string connect = await RunConnectCreationAndFoldersAsync(
+                        ModelNaming.ValidateAndBuild(_pendingContract, _pendingProject));
+                    if (!connect.StartsWith("OK\n", StringComparison.Ordinal))
+                    {
+                        StopProjectTimer();
+                        StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
+                        StatusMessage.Text = connect;
+                        new ConnectDiagnosticsWindow("ModelCreator setup stopped", connect)
+                        { Owner = this }.ShowDialog();
+                        return;
+                    }
+                    _connectCompleted = true;
+                    StatusMessage.Text = "Stages 3/4 complete: Connect project and folders created. " +
+                        "Starting Model Sharing...";
+                    return;
+                }
+                bool startSharing = _projectPropertiesSaved && _connectCompleted;
                 if (startSharing)
                 {
                     // Start cloud sharing ONCE. A lost result is ambiguous and must not
@@ -490,12 +593,12 @@ namespace ModelCreator
                         return;
                     _sharingAttempted = true;
                     StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                    StatusMessage.Text = "Stage 3/3: Starting Tekla Model Sharing...";
+                    StatusMessage.Text = "Stage 5/5: Starting Tekla Model Sharing...";
                 }
                 else
                 {
                     StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                    StatusMessage.Text = "Stage 2/3: Connecting and saving project properties...";
+                    StatusMessage.Text = "Stage 2/5: Connecting and saving project properties...";
                 }
                 string result = await Task.Run(() => ProbeProjectProperties(
                     _expectedModelPath, _pendingContract, _pendingProject, startSharing));
@@ -510,17 +613,15 @@ namespace ModelCreator
                     {
                         _projectPropertiesSaved = true;
                         StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                        StatusMessage.Text = "Stage 2/3 complete: Project properties saved. " +
-                            "Starting Model Sharing next...";
+                        StatusMessage.Text = "Stage 2/5 complete: Project properties saved. Starting Trimble Connect...";
                     }
                     else
                     {
                         _sharingStarted = true;
                         StopProjectTimer();
                         StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                        StatusMessage.Text = "Model created, project properties saved, and " +
-                            "Tekla Model Sharing started. In Tekla, choose File > Trimble Connect > " +
-                            "Start collaboration to link the model to a Severfield Connect project.";
+                        StatusMessage.Text = "Model created, properties saved, Connect project and test folders created, " +
+                            "and Tekla Model Sharing started.";
                     }
                 }
                 else if (outcome == "ERROR")
