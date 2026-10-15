@@ -558,10 +558,12 @@ namespace ModelCreator
                 await Task.Delay(2000);
             }
             lastResult = await TrimbleConnectProjects.AddTestFoldersToExistingProjectAsync(
-                token, name);
-            if (!lastResult.Contains("test 1: POST accepted") ||
+                token, name, _pendingUsers);
+            if ((_pendingUsers.Count > 0 &&
+                !lastResult.Contains("CONNECT INVITES SUBMITTED")) ||
+                !lastResult.Contains("test 1: POST accepted") ||
                 !lastResult.Contains("test 2: POST accepted"))
-                return "FOLDER SETUP NOT CONFIRMED: " + lastResult +
+                return "CONNECT FOLDER OR INVITATIONS NOT CONFIRMED: " + lastResult +
                     "\nCheck Connect before retrying. Model Sharing not started.";
             return "OK\n" + lastResult;
         }
