@@ -210,7 +210,7 @@ namespace ModelCreator
                         (connected ?? diagnostic) + ". Nothing created.");
 
                 if (MessageBox.Show("Create the standard nine root-level folders " +
-                    "in the existing Europe Trimble Connect project '" + modelName +
+                    "in the existing Europe Trimble Connect project '" + ConnectProjectName(modelName) +
                     "'?\n\nThis will not create another Connect project. " +
                     "The project and Severfield Business Premium ownership will be " +
                     "verified first. Do not repeat after an uncertain result.",
@@ -220,7 +220,7 @@ namespace ModelCreator
                 StatusMessage.Text = "Signing in to Trimble Connect to add test folders...";
                 string token = await TrimbleIdentity.LoginAsync();
                 string result = await TrimbleConnectProjects.AddTestFoldersToExistingProjectAsync(
-                    token, modelName);
+                    token, ConnectProjectName(modelName));
                 StatusMessage.Text = "Trimble Connect folder test finished. See result window.";
                 new ConnectDiagnosticsWindow("Trimble Connect folder setup", result)
                 { Owner = this }.ShowDialog();
