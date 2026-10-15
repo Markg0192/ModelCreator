@@ -192,15 +192,16 @@ namespace ModelCreator
 
                 ConnectTestButton.IsEnabled = false;
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Trimble Connect: checking API credentials for the Europe region...";
-                string outcome = await TrimbleConnectAccess.DiagnoseAsync();
+                StatusMessage.Text = "Trimble Connect: opening Trimble Identity sign-in...";
+                string token = await TrimbleIdentity.LoginAsync();
+                string outcome = await TrimbleConnectAccess.DiagnoseAsync(token);
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
                 StatusMessage.Text = outcome;
                 MessageBox.Show("Open model confirmed: " + connected +
-                    "\\n\\nProject name: " + name +
-                    "\\nRegion: Europe" +
-                    "\\nOwnership: Severfield plc — TrimbleConnectBusinessPremium" +
-                    "\\n\\n" + outcome,
+                    "\n\nProject name: " + name +
+                    "\nRegion: Europe" +
+                    "\nOwnership: Severfield plc — TrimbleConnectBusinessPremium" +
+                    "\n\n" + outcome,
                     "Trimble Connect API test", MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
