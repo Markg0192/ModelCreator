@@ -354,12 +354,8 @@ namespace ModelCreator
         {
             string resultFile = Path.Combine(Path.GetTempPath(),
                 "ModelCreatorConnect_" + Guid.NewGuid().ToString("N") + ".txt");
-            string inviteesPath = Path.Combine(Path.GetTempPath(),
-                "ModelCreatorInvitees_" + Guid.NewGuid().ToString("N") + ".json");
             try
             {
-                if (startSharing)
-                    File.WriteAllText(inviteesPath, JsonConvert.SerializeObject(additionalUsers));
                 string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
                 var info = new ProcessStartInfo
                 {
