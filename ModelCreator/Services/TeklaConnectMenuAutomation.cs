@@ -30,9 +30,29 @@ namespace ModelCreator.Services
                 if (title.IndexOf(expectedModelName, StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
 
-                var menu = root.FindFirst(TreeScope.Descendants,
-                    new PropertyCondition(AutomationElement.AutomationIdProperty, "AID_MenuButton"));
-                if (menu == null) return "BLOCKED: Tekla File menu button was not found.";
+                // Right after initial model creation, Tekla can show the model
+                // while still rebuilding its ribbon. Wait for a live File control
+                // instead of failing on the first UI Automation snapshot.
+                AutomationElement menu = null;
+                DateTime menuDeadline = DateTime.UtcNow.AddSeconds(30);
+                while (DateTime.UtcNow < menuDeadline)
+                {
+                    try
+                    {
+                        root = AutomationElement.FromHandle(process.MainWindowHandle);
+                        menu = root.FindFirst(TreeScope.Descendants,
+                            new PropertyCondition(AutomationElement.AutomationIdProperty,
+                                "AID_MenuButton"));
+                        if (menu != null && IsUsable(menu, true)) break;
+                    }
+                    catch (ElementNotAvailableException) { }
+                    catch (InvalidOperationException) { }
+                    menu = null;
+                    System.Threading.Thread.Sleep(350);
+                }
+                if (menu == null)
+                    return "BLOCKED: Tekla File menu did not become available within 30 seconds " +
+                        "after model creation. Window: " + title;
                 if (!Invoke(menu) && !ClickControl(menu, process.MainWindowHandle))
                     return "BLOCKED: Could not click Tekla File menu via UI Automation or native input.";
 
