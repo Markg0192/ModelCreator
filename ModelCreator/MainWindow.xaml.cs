@@ -181,34 +181,22 @@ namespace ModelCreator
             {
                 string modelName = ModelNaming.ValidateAndBuild(
                     ContractNumberInput.Text, ProjectNameInput.Text);
-                string expected = _launcher.GetDestination(modelName);
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Opening Tekla's built-in Trimble Connect collaboration...";
-                string result = await Task.Run(() => RunConnectMacroHelper(expected));
-                StatusMessage.Text = result;
-                if (result.StartsWith("OK:", StringComparison.Ordinal))
-                {
-                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                }
-                else
-                {
-                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                }
-
+                StatusMessage.Text = "Inspecting the currently open Tekla interface...";
+                string report = await Task.Run(() => TeklaWindowInspector.Inspect(modelName));
+                StatusMessage.Text = "Tekla control inspection complete. Copy the report.";
                 new ConnectDiagnosticsWindow(
-                    "Tekla 2026 built-in Trimble Connect collaboration",
-                    result + "\n\nExpected Connect project name: " + modelName +
-                    "\nRegion: Europe" +
-                    "\nLicence: TrimbleConnectBusinessPremium — Severfield plc" +
-                    "\n\nThis button opens the Tekla-side workflow through a recorded macro " +
-                    "if available. It does not claim the cloud project is created or linked.")
+                    "Tekla 2026 window and control inspection",
+                    report + "\n\nRead-only inspection: no buttons were pressed or " +
+                    "cloud projects created. Open the Trimble Connect dialog " +
+                    "manually before running this test to capture its controls.")
                 { Owner = this }.ShowDialog();
             }
             catch (Exception ex)
             {
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Trimble Connect: " + ex.Message;
-                MessageBox.Show(StatusMessage.Text, "Trimble Connect",
+                StatusMessage.Text = "Tekla inspection: " + ex.Message;
+                MessageBox.Show(StatusMessage.Text, "Tekla control inspection",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             finally
