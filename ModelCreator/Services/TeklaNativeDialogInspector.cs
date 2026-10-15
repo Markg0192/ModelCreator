@@ -27,17 +27,21 @@ namespace ModelCreator.Services
             var deadline = DateTime.UtcNow.Add(duration);
             while (DateTime.UtcNow < deadline)
             {
+                var connectorPids = new HashSet<uint>();
+                foreach (var p in Process.GetProcessesByName("TrimbleConnector"))
+                    connectorPids.Add((uint)p.Id);
                 bool found = false;
                 EnumWindows((hwnd, unused) =>
                 {
                     string name = WindowText(hwnd);
                     if (!IsWindowVisible(hwnd) || string.IsNullOrEmpty(name))
                         return true;
-                    if (name.IndexOf("Trimble Connector", StringComparison.OrdinalIgnoreCase) < 0 &&
-                        name.IndexOf("Select project", StringComparison.OrdinalIgnoreCase) < 0)
-                        return true;
                     uint pid;
                     GetWindowThreadProcessId(hwnd, out pid);
+                    if (!connectorPids.Contains(pid) &&
+                        name.IndexOf("Trimble Connector", StringComparison.OrdinalIgnoreCase) < 0 &&
+                        name.IndexOf("Select project", StringComparison.OrdinalIgnoreCase) < 0)
+                        return true;
                     string info = "HWND=0x" + hwnd.ToInt64().ToString("X") +
                         " PID=" + pid + " class=" + ClassName(hwnd) + " title=" + name;
                     if (seen.Add(info)) observations.Add(info);
@@ -62,6 +66,10 @@ namespace ModelCreator.Services
             var pids = new HashSet<uint>();
             foreach (var p in Process.GetProcessesByName("TeklaStructures"))
                 pids.Add((uint)p.Id);
+            foreach (var p in Process.GetProcessesByName("TrimbleConnector"))
+                pids.Add((uint)p.Id);
+            lines.Add("TrimbleConnector processes: " +
+                Process.GetProcessesByName("TrimbleConnector").Length);
             int matching = 0;
             EnumWindows((hwnd, unused) =>
             {
