@@ -37,7 +37,7 @@ namespace ModelCreator.Services
                     return "BLOCKED: Could not click Tekla File menu via UI Automation or native input.";
 
                 // Re-query after opening: Tekla creates the backstage/menu elements lazily.
-                AutomationElement connect = WaitForNamed(root, "Trimble Connect", 3000, true);
+                AutomationElement connect = WaitForFileMenuItem(root, "Trimble Connect", 3000);
                 if (connect == null)
                     return "BLOCKED: File menu opened, but Trimble Connect item was not found. " +
                         "Please open Start collaboration manually and send a UI inspection of the open File menu.";
@@ -53,6 +53,32 @@ namespace ModelCreator.Services
                 return "OPENED: Requested Tekla Start collaboration from its File menu.";
             }
             return "BLOCKED: No matching Tekla window found for " + expectedModelName;
+        }
+
+        private static AutomationElement WaitForFileMenuItem(
+            AutomationElement root, string name, int timeoutMs)
+        {
+            DateTime until = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            while (DateTime.UtcNow < until)
+            {
+                try
+                {
+                    // The ribbon has a separate Custom element also named
+                    // "Trimble Connect". Only a backstage MenuItem is valid here.
+                    var matches = root.FindAll(TreeScope.Descendants,
+                        new AndCondition(
+                            new PropertyCondition(AutomationElement.NameProperty,
+                                name, PropertyConditionFlags.IgnoreCase),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty,
+                                ControlType.MenuItem)));
+                    foreach (AutomationElement item in matches)
+                        if (IsUsable(item, true)) return item;
+                }
+                catch (ElementNotAvailableException) { }
+                catch (InvalidOperationException) { }
+                System.Threading.Thread.Sleep(150);
+            }
+            return null;
         }
 
         private static AutomationElement WaitForNamed(AutomationElement root, string name,
