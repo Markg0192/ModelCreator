@@ -13,6 +13,38 @@ namespace ModelCreator.Services
         private const string EuropeBase = "https://app21.connect.trimble.com/tc/api/2.0/";
         private const string CompanyAccount = "29b87e21-2b12-46e5-aef0-1b1df2958f08";
 
+        private static bool TryParseProjectCreationDate(JToken value, out DateTimeOffset result)
+        {
+            result = default(DateTimeOffset);
+            if (value == null || value.Type == JTokenType.Null) return false;
+            if (value.Type == JTokenType.Date)
+            {
+                result = value.ToObject<DateTimeOffset>().ToUniversalTime();
+                return true;
+            }
+            string raw = value.ToString().Trim();
+            long epoch;
+            if (long.TryParse(raw, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out epoch))
+            {
+                try
+                {
+                    // Trimble endpoints may return Unix seconds or milliseconds.
+                    result = (Math.Abs((double)epoch) >= 100000000000.0
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(epoch)
+                        : DateTimeOffset.FromUnixTimeSeconds(epoch)).ToUniversalTime();
+                    return result.Year >= 2000 && result.Year <= 2100;
+                }
+                catch (ArgumentOutOfRangeException) { return false; }
+            }
+            if (DateTimeOffset.TryParse(raw,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal |
+                System.Globalization.DateTimeStyles.AdjustToUniversal, out result))
+                return result.Year >= 2000 && result.Year <= 2100;
+            return false;
+        }
+
         // Operates only on an existing uniquely named Europe project. No new project POST.
         public static async Task<string> AddTestFoldersToExistingProjectAsync(
             string accessToken, string exactName)
@@ -52,15 +84,17 @@ namespace ModelCreator.Services
                                     (int)candidateResponse.StatusCode + "). No folders created.";
                             JObject candidate = JObject.Parse(await candidateResponse.Content
                                 .ReadAsStringAsync().ConfigureAwait(false));
-                            string createdText = (string)candidate["createdOn"] ??
-                                (string)candidate["createdAt"] ??
-                                (string)candidate["creationDate"] ??
-                                (string)candidate["created"];
+                            JToken createdValue = candidate["createdOn"] ??
+                                candidate["createdAt"] ??
+                                candidate["creationDate"] ??
+                                candidate["created"];
                             DateTimeOffset createdOn;
-                            if (!DateTimeOffset.TryParse(createdText, out createdOn))
+                            if (!TryParseProjectCreationDate(createdValue, out createdOn))
                                 return "BLOCKED: Project '" + candidateId +
-                                    "' has no interpretable creation date. Available fields: " +
-                                    string.Join(", ", candidate.Properties().Select(x => x.Name)) +
+                                    "' has an unsupported createdOn value (" +
+                                    (createdValue == null ? "missing" : createdValue.Type.ToString()) +
+                                    "): " + (createdValue == null ? "(null)" :
+                                        createdValue.ToString(Newtonsoft.Json.Formatting.None)) +
                                     ". No folders created.";
                             candidates.Add(Tuple.Create(candidateId, createdOn));
                         }
