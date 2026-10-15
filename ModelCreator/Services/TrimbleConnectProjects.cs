@@ -174,6 +174,59 @@ namespace ModelCreator.Services
                                     }
                                     report.AppendLine(folder + ": POST accepted, HTTP " +
                                         (int)created.StatusCode);
+                                    if (folder == "04 - Fab Drawing Vault")
+                                    {
+                                        try
+                                        {
+                                            // Create a standard Windows Internet Shortcut,
+                                            // stored as a file in the vault folder.
+                                            // This is not a native Trimble Connect link type.
+                                            JObject createdFolder = JObject.Parse(result);
+                                            string vaultId = (string)createdFolder["id"] ??
+                                                (string)createdFolder["folderId"];
+                                            if (string.IsNullOrWhiteSpace(vaultId))
+                                            {
+                                                report.AppendLine("VAULT LINK PENDING: " +
+                                                    "Folder create response did not contain its ID.");
+                                            }
+                                            else
+                                            {
+                                                string shortcut = "[InternetShortcut]\\r\\nURL=" +
+                                                    "https://wci.severfield.com/Drawings\\r\\n";
+                                                using (var multipart = new MultipartFormDataContent())
+                                                using (var file = new ByteArrayContent(
+                                                    Encoding.UTF8.GetBytes(shortcut)))
+                                                {
+                                                    file.Headers.ContentType =
+                                                        new MediaTypeHeaderValue("application/octet-stream");
+                                                    multipart.Add(file, "file",
+                                                        "Severfield Drawing Vault.url");
+                                                    using (var upload = await http.PostAsync(
+                                                        EuropeBase + "files?parentId=" +
+                                                        Uri.EscapeDataString(vaultId) +
+                                                        "&projectId=" + Uri.EscapeDataString(id),
+                                                        multipart).ConfigureAwait(false))
+                                                    {
+                                                        string uploadResult = await upload.Content
+                                                            .ReadAsStringAsync().ConfigureAwait(false);
+                                                        report.AppendLine(upload.IsSuccessStatusCode
+                                                            ? "VAULT LINK UPLOADED: Internet shortcut to " +
+                                                                "https://wci.severfield.com/Drawings"
+                                                            : "VAULT LINK PENDING: API returned HTTP " +
+                                                                (int)upload.StatusCode + " " +
+                                                                uploadResult.Substring(0,
+                                                                    Math.Min(200, uploadResult.Length)));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        catch (Exception linkError)
+                                        {
+                                            report.AppendLine("VAULT LINK PENDING: " +
+                                                linkError.GetType().Name + ": " +
+                                                linkError.Message);
+                                        }
+                                    }
                                 }
                             }
                             catch (Exception ex)
