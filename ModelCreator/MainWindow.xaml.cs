@@ -193,8 +193,9 @@ namespace ModelCreator
                     "Create and link the Trimble Connect project '" + modelName +
                     "' using Tekla's existing Connector dialog?\n\n" +
                     "Only proceed if this model has no Connect project linked. " +
-                    "ModelCreator will minimise. Open File > Trimble Connect > " +
-                    "Start collaboration, select the new project name, Europe, and " +
+                    "ModelCreator will minimise and try to open File > Trimble Connect > " +
+                    "Start collaboration. If it cannot open the dialog, do so manually. " +
+                    "Select the new project name, Europe, and " +
                     "Severfield plc (TrimbleConnectBusinessPremium).\n\n" +
                     "The application will check the selections and press Create ONCE " +
                     "if they match. A failed or unclear result will not be retried.",
@@ -203,8 +204,10 @@ namespace ModelCreator
                 if (approval != MessageBoxResult.Yes) return;
 
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Waiting for Trimble Connector...";
+                StatusMessage.Text = "Opening Tekla File > Trimble Connect > Start collaboration...";
                 WindowState = WindowState.Minimized;
+                string menuResult = await Task.Run(() =>
+                    TeklaConnectMenuAutomation.OpenCollaboration(modelName));
                 string result = await Task.Run(() =>
                 {
                     DateTime deadline = DateTime.UtcNow.AddSeconds(30);
@@ -225,7 +228,7 @@ namespace ModelCreator
                         }
                         System.Threading.Thread.Sleep(250);
                     }
-                    return "BLOCKED\n" + last +
+                    return "BLOCKED\n" + menuResult + "\n" + last +
                         "\nNo Create action was sent.";
                 });
                 WindowState = WindowState.Normal;
