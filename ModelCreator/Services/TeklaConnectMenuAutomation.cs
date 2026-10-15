@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
 
@@ -36,16 +37,17 @@ namespace ModelCreator.Services
                     return "BLOCKED: Could not click Tekla File menu via UI Automation or native input.";
 
                 // Re-query after opening: Tekla creates the backstage/menu elements lazily.
-                AutomationElement connect = WaitForNamed(root, "Trimble Connect", 3000);
+                AutomationElement connect = WaitForNamed(root, "Trimble Connect", 3000, true);
                 if (connect == null)
                     return "BLOCKED: File menu opened, but Trimble Connect item was not found. " +
                         "Please open Start collaboration manually and send a UI inspection of the open File menu.";
                 if (!Invoke(connect) && !ClickControl(connect, process.MainWindowHandle))
                     return "BLOCKED: Trimble Connect menu item cannot be clicked.";
 
-                AutomationElement start = WaitForNamed(root, "Start collaboration", 3000);
+                AutomationElement start = WaitForNamed(root, "Start collaboration", 4500, true);
                 if (start == null)
-                    return "BLOCKED: Trimble Connect menu opened, but Start collaboration was not found.";
+                    return "BLOCKED: Start collaboration was not found in the visible Tekla menu. " +
+                        "Visible menu controls: " + DescribeVisibleControls(root);
                 if (!Invoke(start) && !ClickControl(start, process.MainWindowHandle))
                     return "BLOCKED: Start collaboration item cannot be clicked.";
                 return "OPENED: Requested Tekla Start collaboration from its File menu.";
@@ -53,33 +55,72 @@ namespace ModelCreator.Services
             return "BLOCKED: No matching Tekla window found for " + expectedModelName;
         }
 
-        private static AutomationElement WaitForNamed(AutomationElement root, string name, int timeoutMs)
+        private static AutomationElement WaitForNamed(AutomationElement root, string name,
+            int timeoutMs, bool requireVisible)
         {
             var limit = DateTime.UtcNow.AddMilliseconds(timeoutMs);
             while (DateTime.UtcNow < limit)
             {
                 try
                 {
-                    var found = root.FindFirst(TreeScope.Descendants,
+                    var candidates = root.FindAll(TreeScope.Descendants,
                         new PropertyCondition(AutomationElement.NameProperty, name,
                             PropertyConditionFlags.IgnoreCase));
-                    if (found != null && found.Current.IsEnabled) return found;
-                    // Menus can be separate popup windows owned by the Tekla process.
+                    foreach (AutomationElement candidate in candidates)
+                        if (IsUsable(candidate, requireVisible)) return candidate;
+
                     var windows = AutomationElement.RootElement.FindAll(
                         TreeScope.Children, Condition.TrueCondition);
                     foreach (AutomationElement w in windows)
                     {
                         if (w.Current.ProcessId != root.Current.ProcessId) continue;
-                        found = w.FindFirst(TreeScope.Descendants,
+                        candidates = w.FindAll(TreeScope.Descendants,
                             new PropertyCondition(AutomationElement.NameProperty, name,
                                 PropertyConditionFlags.IgnoreCase));
-                        if (found != null && found.Current.IsEnabled) return found;
+                        foreach (AutomationElement candidate in candidates)
+                            if (IsUsable(candidate, requireVisible)) return candidate;
                     }
                 }
                 catch (ElementNotAvailableException) { }
+                catch (InvalidOperationException) { }
                 System.Threading.Thread.Sleep(150);
             }
             return null;
+        }
+
+        private static bool IsUsable(AutomationElement element, bool requireVisible)
+        {
+            if (!element.Current.IsEnabled) return false;
+            if (!requireVisible) return true;
+            var rect = element.Current.BoundingRectangle;
+            return !element.Current.IsOffscreen && !rect.IsEmpty &&
+                rect.Width > 2 && rect.Height > 2;
+        }
+
+        private static string DescribeVisibleControls(AutomationElement root)
+        {
+            var found = new List<string>();
+            try
+            {
+                var all = root.FindAll(TreeScope.Descendants, Condition.TrueCondition);
+                foreach (AutomationElement el in all)
+                {
+                    if (found.Count >= 35) break;
+                    try
+                    {
+                        if (el.Current.IsOffscreen) continue;
+                        string name = el.Current.Name;
+                        if (string.IsNullOrWhiteSpace(name)) continue;
+                        var type = el.Current.ControlType;
+                        if (type != ControlType.MenuItem && type != ControlType.Button &&
+                            type != ControlType.Text && type != ControlType.ListItem) continue;
+                        if (!found.Contains(name)) found.Add(name);
+                    }
+                    catch (ElementNotAvailableException) { }
+                }
+            }
+            catch (ElementNotAvailableException) { }
+            return found.Count == 0 ? "(none)" : string.Join(" | ", found);
         }
 
         private static bool ClickControl(AutomationElement element, IntPtr teklaHandle)
