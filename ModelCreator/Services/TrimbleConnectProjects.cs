@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -11,6 +12,38 @@ namespace ModelCreator.Services
     {
         private const string EuropeBase = "https://app21.connect.trimble.com/tc/api/2.0/";
         private const string CompanyAccount = "29b87e21-2b12-46e5-aef0-1b1df2958f08";
+
+        // Called only after project creation has returned a verified Europe rootFolderId.
+        // Never create folders if a project/region cannot be confirmed.
+        public static async Task CreateTestFoldersAsync(string accessToken, string rootFolderId)
+        {
+            if (string.IsNullOrWhiteSpace(rootFolderId))
+                throw new ArgumentException("Project root folder ID is required.");
+
+            using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
+            {
+                http.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", accessToken);
+                foreach (string name in new[] { "test 1", "test 2" })
+                {
+                    var payload = new JObject
+                    {
+                        ["name"] = name,
+                        ["parentId"] = rootFolderId
+                    };
+                    using (var body = new StringContent(payload.ToString(),
+                        Encoding.UTF8, "application/json"))
+                    using (var response = await http.PostAsync(EuropeBase + "folders", body)
+                        .ConfigureAwait(false))
+                    {
+                        if (!response.IsSuccessStatusCode)
+                            throw new InvalidOperationException(
+                                "Could not create folder '" + name + "' (HTTP " +
+                                (int)response.StatusCode + ").");
+                    }
+                }
+            }
+        }
 
         // Read-only preflight: we cannot safely create an owned project until
         // the concrete Severfield entitlement/license ID is validated.
