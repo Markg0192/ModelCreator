@@ -13,6 +13,30 @@ namespace ModelCreator.Services
         private const string RegionId = "AID_TrimbleConnector.AttachProject.Regions";
         private const string LicenseId = "AID_TrimbleConnector.AttachProject.Licenses";
 
+        internal static string EnsureProjectName(string teklaName, string connectName)
+        {
+            AutomationElement root = FindDialog();
+            if (root == null) return "WAIT: Connector dialog not yet visible.";
+            AutomationElement project = Find(root, ProjectId);
+            if (project == null) return "WAIT: Project name control not ready.";
+            string current = GetProjectValue(project);
+            if (string.Equals(current, connectName, StringComparison.OrdinalIgnoreCase))
+                return "READY";
+            // Only rewrite Tekla's generated default; never overwrite an unrelated
+            // project selection or risk linking a different existing project.
+            if (!string.Equals(current, teklaName, StringComparison.OrdinalIgnoreCase))
+                return "BLOCKED: Connector shows unexpected project name: " + current;
+            AutomationElement edit = project.FindFirst(TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit));
+            object pattern;
+            if (edit == null || !edit.TryGetCurrentPattern(ValuePattern.Pattern, out pattern))
+                return "BLOCKED: Connector project name is not editable through UI Automation.";
+            if (((ValuePattern)pattern).Current.IsReadOnly)
+                return "BLOCKED: Connector project name field is read-only.";
+            ((ValuePattern)pattern).SetValue(connectName);
+            return "WAIT: Updated Connect project name, waiting for validation.";
+        }
+
         internal static string InspectSelection(string expectedName)
         {
             AutomationElement root = FindDialog();
