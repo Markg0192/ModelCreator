@@ -81,6 +81,29 @@ namespace ModelCreator.Services
                             }
                             JObject detail = JObject.Parse(await response.Content
                                 .ReadAsStringAsync().ConfigureAwait(false));
+                            // The nested licence record may expose its account and
+                            // entitlement fields, even when the project does not.
+                            JToken licenceObject = detail["license"];
+                            if (licenceObject is JObject)
+                            {
+                                var licenseFields = ((JObject)licenceObject).Properties()
+                                    .Select(p => p.Name).ToArray();
+                                string licenseAccount = (string)licenceObject["accountId"] ??
+                                    (string)licenceObject["account"]?["id"] ??
+                                    (string)licenceObject["companyId"] ??
+                                    (string)licenceObject["ownerId"];
+                                string licenseAccountName = (string)licenceObject["accountName"] ??
+                                    (string)licenceObject["account"]?["name"] ??
+                                    (string)licenceObject["companyName"];
+                                string entitlement = (string)licenceObject["entitlementId"] ??
+                                    (string)licenceObject["productId"];
+                                report.Add("Licence structure in '" +
+                                    ((string)detail["name"] ?? "(unnamed)") + "': fields=" +
+                                    string.Join(", ", licenseFields) +
+                                    "; company/account=" + (licenseAccountName ?? "(not exposed)") +
+                                    "; account ID=" + (licenseAccount ?? "(not exposed)") +
+                                    "; entitlement ID=" + (entitlement ?? "(not exposed)"));
+                            }
                             string accountId = (string)detail["accountId"] ??
                                 (string)detail["account"]?["id"];
                             string licenseId = (string)detail["licenseId"] ??
