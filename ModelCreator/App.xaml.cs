@@ -37,14 +37,14 @@ namespace ModelCreator
                 return;
             }
 
-            if (e.Args.Length == 5 && e.Args[0] == "--start-sharing")
+            if (e.Args.Length == 6 && e.Args[0] == "--start-sharing")
             {
                 try
                 {
                     // Do not block the WPF dispatcher while waiting for Tekla's async
                     // sharing operation: continuations may need that context.
                     string result = Task.Run(() => TeklaModelSharing.StartAsync(
-                        e.Args[1], e.Args[2], e.Args[3]       )).GetAwaiter().GetResult();
+                        e.Args[1], e.Args[2], e.Args[3], e.Args[5])).GetAwaiter().GetResult();
                     File.WriteAllText(e.Args[4], "OK" + Environment.NewLine + result);
                 }
                 catch (Exception ex)
