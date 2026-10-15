@@ -212,6 +212,73 @@ namespace ModelCreator.Services
                                 ["projectId"] = id,
                                 ["updates"] = updates
                             });
+                            // The account-management service is distinct from the
+                            // Europe project service. It may lag project creation, or
+                            // the authenticated user may lack account admin access.
+                            // Confirm the new project exists THERE before its one
+                            // and only membership update request.
+                            bool accountVisible = false;
+                            string accountDiagnostic = "";
+                            for (int check = 0; check < 8; check++)
+                            {
+                                using (var ownership = await http.GetAsync(
+                                    "https://ecom.connect.trimble.com/v1/accounts/" +
+                                    Uri.EscapeDataString(CompanyAccount) +
+                                    "/projects?size=100&page=1").ConfigureAwait(false))
+                                {
+                                    string ownershipBody = await ownership.Content
+                                        .ReadAsStringAsync().ConfigureAwait(false);
+                                    if (!ownership.IsSuccessStatusCode)
+                                    {
+                                        accountDiagnostic = "Account projects HTTP " +
+                                            (int)ownership.StatusCode + " " +
+                                            ownershipBody.Substring(0,
+                                                Math.Min(240, ownershipBody.Length));
+                                        break;
+                                    }
+                                    try
+                                    {
+                                        JToken accountJson = JToken.Parse(ownershipBody);
+                                        var accountProjects = accountJson as JArray ??
+                                            accountJson["content"] as JArray ??
+                                            accountJson["projects"] as JArray ??
+                                            accountJson["items"] as JArray ??
+                                            accountJson["data"] as JArray;
+                                        if (accountProjects == null)
+                                        {
+                                            accountDiagnostic = "Unknown account project list shape. " +
+                                                "Fields: " + string.Join(", ",
+                                                    (accountJson as JObject)?.Properties()
+                                                        .Select(x => x.Name) ??
+                                                    Enumerable.Empty<string>());
+                                            break;
+                                        }
+                                        accountVisible = accountProjects.Any(x =>
+                                            string.Equals((string)x["id"], id,
+                                                StringComparison.OrdinalIgnoreCase) ||
+                                            string.Equals((string)x["projectId"], id,
+                                                StringComparison.OrdinalIgnoreCase));
+                                        accountDiagnostic = accountVisible
+                                            ? "Project verified in Connect account service."
+                                            : "Project not yet visible in Connect account service.";
+                                    }
+                                    catch (Exception parseEx)
+                                    {
+                                        accountDiagnostic = "Account project response: " +
+                                            parseEx.GetType().Name + ": " + parseEx.Message;
+                                        break;
+                                    }
+                                }
+                                if (accountVisible) break;
+                                if (check < 7) await Task.Delay(2000).ConfigureAwait(false);
+                            }
+                            if (!accountVisible)
+                            {
+                                report.AppendLine("CONNECT INVITES NOT SENT: " +
+                                    accountDiagnostic + " Check account administrator access " +
+                                    "and project synchronization. No membership POST attempted.");
+                                return report.ToString();
+                            }
                             try
                             {
                                 using (var body = new StringContent(
