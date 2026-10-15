@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -29,10 +30,23 @@ namespace ModelCreator.Services
 
             // Registered callback is http://localhost. Avoid changing the redirect
             // port/path unless Trimble confirms that URL is registered.
-            using (var listener = new HttpListener())
+            // A normal TCP listener avoids Windows HTTP.sys URL ACL permissions.
+            // Port 80 matches the registered http://localhost callback.
+            using (var listener = new TcpListener(IPAddress.IPv6Any, 80))
             {
-                listener.Prefixes.Add(Redirect);
-                listener.Start();
+                listener.Server.DualMode = true; // accepts localhost over IPv4 or IPv6
+                try
+                {
+                    listener.Start();
+                }
+                catch (SocketException ex)
+                {
+                    throw new InvalidOperationException(
+                        "Cannot listen for Trimble sign-in on localhost port 80. " +
+                        "Another application may be using that port, or Windows may be blocking it. " +
+                        "Details: " + ex.Message, ex);
+                }
+
                 string authorize = BaseUrl + "/oauth/authorize?response_type=code" +
                     "&client_id=" + Uri.EscapeDataString(ClientId) +
                     "&redirect_uri=" + Uri.EscapeDataString(Redirect) +
@@ -41,21 +55,43 @@ namespace ModelCreator.Services
                     "&code_challenge_method=S256&code_challenge=" + Uri.EscapeDataString(challenge);
 
                 Process.Start(new ProcessStartInfo(authorize) { UseShellExecute = true });
-                var callback = listener.GetContextAsync();
+                Task<TcpClient> callback = listener.AcceptTcpClientAsync();
                 if (await Task.WhenAny(callback, Task.Delay(TimeSpan.FromMinutes(3)))
                     .ConfigureAwait(false) != callback)
                     throw new TimeoutException("Trimble sign-in timed out.");
 
-                HttpListenerContext context = await callback.ConfigureAwait(false);
-                string returnedState = context.Request.QueryString["state"];
-                string code = context.Request.QueryString["code"];
-                string oauthError = context.Request.QueryString["error"];
-                const string page = "<html><body>Trimble login received. Return to ModelCreator.</body></html>";
-                byte[] bytes = Encoding.UTF8.GetBytes(page);
-                context.Response.ContentType = "text/html; charset=utf-8";
-                context.Response.ContentLength64 = bytes.Length;
-                await context.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-                context.Response.Close();
+                string returnedState;
+                string code;
+                string oauthError;
+                using (TcpClient connection = await callback.ConfigureAwait(false))
+                using (NetworkStream stream = connection.GetStream())
+                {
+                    stream.ReadTimeout = 10000;
+                    var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, true);
+                    string requestLine = await reader.ReadLineAsync().ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(requestLine) ||
+                        !requestLine.StartsWith("GET /", StringComparison.Ordinal))
+                        throw new InvalidOperationException("Unexpected Trimble callback request.");
+
+                    string[] segments = requestLine.Split(' ');
+                    if (segments.Length < 3)
+                        throw new InvalidOperationException("Invalid Trimble callback request.");
+
+                    var callbackUri = new Uri("http://localhost" + segments[1]);
+                    var parameters = System.Web.HttpUtility.ParseQueryString(callbackUri.Query);
+                    returnedState = parameters["state"];
+                    code = parameters["code"];
+                    oauthError = parameters["error"];
+
+                    string html = "<html><body>Trimble sign-in received. You can return to ModelCreator.</body></html>";
+                    byte[] body = Encoding.UTF8.GetBytes(html);
+                    string headers = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n" +
+                        "Content-Length: " + body.Length + "\r\nConnection: close\r\n\r\n";
+                    byte[] headerBytes = Encoding.ASCII.GetBytes(headers);
+                    await stream.WriteAsync(headerBytes, 0, headerBytes.Length).ConfigureAwait(false);
+                    await stream.WriteAsync(body, 0, body.Length).ConfigureAwait(false);
+                    await stream.FlushAsync().ConfigureAwait(false);
+                }
 
                 if (!string.Equals(state, returnedState, StringComparison.Ordinal))
                     throw new InvalidOperationException("Trimble sign-in state verification failed.");
