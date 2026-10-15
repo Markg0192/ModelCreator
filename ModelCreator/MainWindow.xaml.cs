@@ -257,7 +257,7 @@ namespace ModelCreator
                         modelName + ". " + (actual ?? diag) + ". Nothing created.");
 
                 MessageBoxResult approval = MessageBox.Show(
-                    "Create and link the Trimble Connect project '" + modelName +
+                    "Create and link the Trimble Connect project '" + ConnectProjectName(modelName) +
                     "' using Tekla's existing Connector dialog?\n\n" +
                     "Only proceed if this model has no Connect project linked. " +
                     "ModelCreator will minimise and try to open File > Trimble Connect > " +
@@ -285,7 +285,9 @@ namespace ModelCreator
                     {
                         try
                         {
-                            last = TrimbleConnectorAutomation.InspectSelection(modelName);
+                            string naming = TrimbleConnectorAutomation.EnsureProjectName(modelName, ConnectProjectName(modelName));
+                            if (naming.StartsWith("BLOCKED:", StringComparison.Ordinal)) return naming;
+                            last = TrimbleConnectorAutomation.InspectSelection(ConnectProjectName(modelName));
                             if (last.StartsWith("WAIT:", StringComparison.Ordinal))
                             {
                                 firstVisible = null;
@@ -305,7 +307,7 @@ namespace ModelCreator
                                 if (readyChecks >= 2 &&
                                     DateTime.UtcNow - firstVisible.Value >=
                                         TimeSpan.FromMilliseconds(1500))
-                                    return TrimbleConnectorAutomation.CreateIfVerified(modelName);
+                                    return TrimbleConnectorAutomation.CreateIfVerified(ConnectProjectName(modelName));
                             }
                         }
                         catch (System.Windows.Automation.ElementNotEnabledException)
@@ -490,8 +492,16 @@ namespace ModelCreator
             return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
 
+        private static string ConnectProjectName(string teklaModelName)
+        {
+            // Contract Cxxxx is retained for Tekla but stripped from Connect.
+            return teklaModelName.StartsWith("C", StringComparison.OrdinalIgnoreCase)
+                ? teklaModelName.Substring(1) : teklaModelName;
+        }
+
         private async Task<string> RunConnectCreationAndFoldersAsync(string name)
         {
+            string connectName = ConnectProjectName(name);
             WindowState = WindowState.Minimized;
             try
             {
@@ -507,7 +517,10 @@ namespace ModelCreator
                     {
                         try
                         {
-                            last = TrimbleConnectorAutomation.InspectSelection(name);
+                            string naming = TrimbleConnectorAutomation.EnsureProjectName(name, connectName);
+                            if (naming.StartsWith("BLOCKED:", StringComparison.Ordinal))
+                                return naming;
+                            last = TrimbleConnectorAutomation.InspectSelection(connectName);
                             if (last.StartsWith("WAIT:", StringComparison.Ordinal))
                             {
                                 stable = 0;
@@ -520,7 +533,7 @@ namespace ModelCreator
                                     ? stable + 1 : 0;
                                 if (stable >= 2 && DateTime.UtcNow - firstVisible.Value >=
                                     TimeSpan.FromMilliseconds(1500))
-                                    return TrimbleConnectorAutomation.CreateIfVerified(name);
+                                    return TrimbleConnectorAutomation.CreateIfVerified(connectName);
                             }
                         }
                         catch (System.Windows.Automation.ElementNotAvailableException)
@@ -550,7 +563,7 @@ namespace ModelCreator
             {
                 // Only retry read/lookup when the new project isn't visible yet.
                 // The folder write itself is NEVER retried.
-                string lookup = await TrimbleConnectProjects.PreflightAsync(token, name);
+                string lookup = await TrimbleConnectProjects.PreflightAsync(token, connectName);
                 if (lookup.IndexOf("already uses the name", StringComparison.Ordinal) >= 0)
                     break;
                 if (attempt == 5)
@@ -559,7 +572,7 @@ namespace ModelCreator
                 await Task.Delay(2000);
             }
             lastResult = await TrimbleConnectProjects.AddTestFoldersToExistingProjectAsync(
-                token, name, _pendingUsers);
+                token, connectName, _pendingUsers);
             if (!new[] { "00 - Client Model", "01 - WIP Model", "02 - Design", "03 - GA's", "04 - Fab Drawing Vault", "05 - Site Works", "06 - Lotting & Load Lists", "07 - Construction", "99 - Trimble Connect Training" }.All(folder =>
                     lastResult.Contains(folder + ": POST accepted")))
                 return "CONNECT FOLDERS NOT CONFIRMED: " + lastResult +
