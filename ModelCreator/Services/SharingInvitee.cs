@@ -23,10 +23,17 @@ namespace ModelCreator.Services
     {
         internal static List<SharingInvitee> Validate(IEnumerable<SharingInvitee> entries)
         {
+            var source = entries.ToList();
+            // Trimble Connect account bulk-update accepts at most 15 users.
+            // Validate before creating the Tekla model, not after cloud creation.
+            if (source.Count > 15)
+                throw new InvalidOperationException(
+                    "A maximum of 15 additional users can be included in the initial " +
+                    "Trimble Connect invitation. Reduce the list before creating the model.");
             var output = new List<SharingInvitee>();
             var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var roles = new[] { "Owner", "Editor", "Viewer", "Project viewer" };
-            foreach (SharingInvitee entry in entries)
+            foreach (SharingInvitee entry in source)
             {
                 string email = (entry.Email ?? "").Trim();
                 if (string.IsNullOrEmpty(email))
