@@ -196,7 +196,8 @@ namespace ModelCreator
                 string token = await TrimbleIdentity.LoginAsync();
                 string auth = await TrimbleConnectAccess.DiagnoseAsync(token);
                 string outcome = auth.StartsWith("Trimble Connect sign-in and API authentication succeeded.", StringComparison.Ordinal)
-                    ? await TrimbleConnectProjects.PreflightAsync(token, name) : auth;
+                    ? await TrimbleConnectProjects.PreflightAsync(token, name) + "\n\n" +
+                        await TrimbleLicenseDiscovery.InspectAsync(token) : auth;
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
                 StatusMessage.Text = outcome;
                 MessageBox.Show("Open model confirmed: " + connected +
