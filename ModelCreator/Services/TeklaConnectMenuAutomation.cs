@@ -68,6 +68,12 @@ namespace ModelCreator.Services
                     // visible File menu's vertical panel, never the ribbon tab.
                     var menuLabel = root.FindFirst(TreeScope.Descendants,
                         new PropertyCondition(AutomationElement.NameProperty, "Modeling"));
+                    if (menuLabel == null || !IsUsable(menuLabel, true))
+                    {
+                        System.Threading.Thread.Sleep(150);
+                        continue;
+                    }
+                    var backstage = menuLabel.Current.BoundingRectangle;
                     var matches = root.FindAll(TreeScope.Descendants,
                         new PropertyCondition(AutomationElement.NameProperty, name,
                             PropertyConditionFlags.IgnoreCase));
@@ -75,7 +81,8 @@ namespace ModelCreator.Services
                     {
                         if (!IsUsable(item, true)) continue;
                         var rect = item.Current.BoundingRectangle;
-                        if (rect.Left < 0 || rect.Left > 360 || rect.Top < 0)
+                        if (Math.Abs(rect.Left - backstage.Left) > 220 ||
+                            rect.Top <= backstage.Top || rect.Top > backstage.Top + 850)
                             continue;
                         if (item.Current.ControlType == ControlType.Text ||
                             item.Current.ControlType == ControlType.MenuItem ||
