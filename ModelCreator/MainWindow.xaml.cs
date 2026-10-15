@@ -183,7 +183,8 @@ namespace ModelCreator
                     ContractNumberInput.Text, ProjectNameInput.Text);
                 StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
                 StatusMessage.Text = "Inspecting the currently open Tekla interface...";
-                string report = await Task.Run(() => TeklaWindowInspector.Inspect(modelName));
+                string report = await Task.Run(() => TeklaWindowInspector.Inspect(modelName) +
+                    "\n\n" + TeklaNativeDialogInspector.Inspect());
                 StatusMessage.Text = "Tekla control inspection complete. Copy the report.";
                 new ConnectDiagnosticsWindow(
                     "Tekla 2026 window and control inspection",
