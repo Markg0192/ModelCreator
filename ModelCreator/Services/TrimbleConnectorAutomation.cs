@@ -40,6 +40,56 @@ namespace ModelCreator.Services
                     "and Severfield Business Premium in Tekla's dialog.";
         }
 
+        internal static string SelectEuropeAndCreate(string expectedName)
+        {
+            AutomationElement dialog = FindDialog();
+            if (dialog == null) return "BLOCKED\nConnector dialog not found.";
+            AutomationElement region = Find(dialog, RegionId);
+            if (region == null) return "BLOCKED\nRegion selector not found.";
+
+            if (!string.Equals(SelectedText(region), "Europe",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                object pattern;
+                if (!region.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out pattern))
+                    return "BLOCKED\nRegion selector cannot be expanded.";
+                ((ExpandCollapsePattern)pattern).Expand();
+
+                AutomationElement europe = null;
+                DateTime deadline = DateTime.UtcNow.AddSeconds(4);
+                while (DateTime.UtcNow < deadline && europe == null)
+                {
+                    // WPF ComboBox items may appear in a separate popup window.
+                    foreach (AutomationElement window in AutomationElement.RootElement.FindAll(
+                        TreeScope.Children, Condition.TrueCondition))
+                    {
+                        if (window.Current.ProcessId != dialog.Current.ProcessId) continue;
+                        var items = window.FindAll(TreeScope.Descendants,
+                            new PropertyCondition(AutomationElement.NameProperty,
+                                "Europe", PropertyConditionFlags.IgnoreCase));
+                        foreach (AutomationElement item in items)
+                        {
+                            if (item.Current.ControlType == ControlType.ListItem &&
+                                item.Current.IsEnabled && !item.Current.IsOffscreen)
+                            { europe = item; break; }
+                        }
+                        if (europe != null) break;
+                    }
+                    if (europe == null) System.Threading.Thread.Sleep(100);
+                }
+
+                if (europe == null)
+                    return "BLOCKED\nEurope option not found in region dropdown.";
+                if (!europe.TryGetCurrentPattern(SelectionItemPattern.Pattern, out pattern))
+                    return "BLOCKED\nEurope option cannot be selected.";
+                ((SelectionItemPattern)pattern).Select();
+                System.Threading.Thread.Sleep(250);
+            }
+
+            // Region changes may refresh the licence list, so always recheck.
+            return CreateIfVerified(expectedName);
+        }
+
         internal static string CreateIfVerified(string expectedName)
         {
             string status = InspectSelection(expectedName);
