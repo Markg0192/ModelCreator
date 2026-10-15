@@ -144,7 +144,7 @@ namespace ModelCreator.Services
                         report.AppendLine("Verified Europe project: " + exactName + " (" + id + ")");
                         report.AppendLine("Verified licence: " + organization + " / " + sku);
                         report.AppendLine("Root folder ID: " + rootId);
-                        foreach (string folder in new[] { "test 1", "test 2" })
+                        foreach (string folder in new[] { "00 - Client Model", "01 - WIP Model", "02 - Design", "03 - GA's", "04 - Fab Drawing Vault", "05 - Site Works", "06 - Lotting & Load Lists", "07 - Construction", "99 - Trimble Connect Training" })
                         {
                             // Each POST is sent at most once; an ambiguous response
                             // is reported for manual inspection, never retried.
@@ -213,7 +213,7 @@ namespace ModelCreator.Services
             {
                 http.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Bearer", accessToken);
-                foreach (string name in new[] { "test 1", "test 2" })
+                foreach (string name in new[] { "00 - Client Model", "01 - WIP Model", "02 - Design", "03 - GA's", "04 - Fab Drawing Vault", "05 - Site Works", "06 - Lotting & Load Lists", "07 - Construction", "99 - Trimble Connect Training" })
                 {
                     var payload = new JObject
                     {
