@@ -559,12 +559,12 @@ namespace ModelCreator
             }
             lastResult = await TrimbleConnectProjects.AddTestFoldersToExistingProjectAsync(
                 token, name, _pendingUsers);
-            if ((_pendingUsers.Count > 0 &&
-                !lastResult.Contains("CONNECT INVITES SUBMITTED")) ||
-                !lastResult.Contains("test 1: POST accepted") ||
+            if (!lastResult.Contains("test 1: POST accepted") ||
                 !lastResult.Contains("test 2: POST accepted"))
-                return "CONNECT FOLDER OR INVITATIONS NOT CONFIRMED: " + lastResult +
+                return "CONNECT FOLDERS NOT CONFIRMED: " + lastResult +
                     "\nCheck Connect before retrying. Model Sharing not started.";
+            if (lastResult.Contains("CONNECT USERS PENDING:"))
+                _lastDiagnostic = lastResult;
             return "OK\n" + lastResult;
         }
 
@@ -646,7 +646,9 @@ namespace ModelCreator
                         StopProjectTimer();
                         StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
                         StatusMessage.Text = "Model created, properties saved, Connect project and test folders created, " +
-                            "and Tekla Model Sharing started. " + diagnostic;
+                            "and Tekla Model Sharing started. " + diagnostic +
+                            (_lastDiagnostic.Contains("CONNECT USERS PENDING:") ?
+                            " WARNING: Connect members still need to be invited from its Team page." : "");
                     }
                 }
                 else if (outcome == "ERROR")
