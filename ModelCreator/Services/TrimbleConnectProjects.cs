@@ -191,8 +191,8 @@ namespace ModelCreator.Services
                                             }
                                             else
                                             {
-                                                string shortcut = "[InternetShortcut]\\r\\nURL=" +
-                                                    "https://wci.severfield.com/Drawings\\r\\n";
+                                                string shortcut = "[InternetShortcut]\r\nURL=" +
+                                                    "https://wci.severfield.com/Drawings\r\n";
                                                 using (var multipart = new MultipartFormDataContent())
                                                 using (var file = new ByteArrayContent(
                                                     Encoding.UTF8.GetBytes(shortcut)))
