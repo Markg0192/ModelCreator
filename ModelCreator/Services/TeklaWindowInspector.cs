@@ -28,9 +28,9 @@ namespace ModelCreator.Services
                         int pid = window.Current.ProcessId;
                         string title = window.Current.Name ?? "";
                         bool isTekla = pids.Contains(pid);
-                        bool isConnect = Contains(title, "trimble") ||
-                            Contains(title, "collaboration") || Contains(title, "connect");
-                        if (!isTekla && !isConnect) continue;
+                        // Only inspect windows belonging to Tekla. Matching a title
+                        // alone also picks up Visual Studio and web browser tabs.
+                        if (!isTekla) continue;
                         lines.Add("Window PID=" + pid + " TeklaProcess=" + isTekla +
                             " title='" + Clip(title) + "'");
                         int visited = 0, reported = 0;
