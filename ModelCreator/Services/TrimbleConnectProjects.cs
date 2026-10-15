@@ -45,6 +45,64 @@ namespace ModelCreator.Services
             }
         }
 
+        // Examine a small sample of existing project details via the documented
+        // GET /projects/{id} API. Never request files, members or change projects.
+        public static async Task<string> InspectProjectOwnershipAsync(string accessToken)
+        {
+            using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(25) })
+            {
+                http.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", accessToken);
+                using (HttpResponseMessage listing = await http.GetAsync(
+                    EuropeBase + "projects?fullyLoaded=false").ConfigureAwait(false))
+                {
+                    if (!listing.IsSuccessStatusCode)
+                        return "Europe project list returned HTTP " + (int)listing.StatusCode;
+                    JToken json = JToken.Parse(await listing.Content.ReadAsStringAsync()
+                        .ConfigureAwait(false));
+                    JArray projects = json as JArray ?? json["projects"] as JArray ??
+                        json["items"] as JArray;
+                    if (projects == null)
+                        return "Could not interpret the project list format.";
+
+                    var report = new System.Collections.Generic.List<string>();
+                    foreach (JToken entry in projects.Take(8))
+                    {
+                        string id = (string)entry["id"];
+                        if (string.IsNullOrWhiteSpace(id)) continue;
+                        using (HttpResponseMessage response = await http.GetAsync(
+                            EuropeBase + "projects/" + Uri.EscapeDataString(id))
+                            .ConfigureAwait(false))
+                        {
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                report.Add("Project details HTTP " + (int)response.StatusCode);
+                                continue;
+                            }
+                            JObject detail = JObject.Parse(await response.Content
+                                .ReadAsStringAsync().ConfigureAwait(false));
+                            string accountId = (string)detail["accountId"] ??
+                                (string)detail["account"]?["id"];
+                            string licenseId = (string)detail["licenseId"] ??
+                                (string)detail["license"]?["id"];
+                            string license = (string)detail["licenseName"] ??
+                                (string)detail["license"]?["name"];
+                            if (accountId != null || licenseId != null || license != null)
+                                report.Add("Project: " + ((string)detail["name"] ?? "(unnamed)") +
+                                    "; accountId=" + (accountId ?? "(unavailable)") +
+                                    "; licenseId=" + (licenseId ?? "(unavailable)") +
+                                    "; license=" + (license ?? "(unavailable)"));
+                        }
+                    }
+                    return report.Count == 0
+                        ? "Existing project detail responses did not expose accountId/licenseId " +
+                          "in the standard fields; the creation licence remains unverified."
+                        : "Existing Europe project ownership metadata (read-only):" +
+                            Environment.NewLine + string.Join(Environment.NewLine, report);
+                }
+            }
+        }
+
         // Read-only preflight: we cannot safely create an owned project until
         // the concrete Severfield entitlement/license ID is validated.
         public static async Task<string> PreflightAsync(string accessToken, string exactModelName)
