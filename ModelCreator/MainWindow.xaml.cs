@@ -404,11 +404,9 @@ namespace ModelCreator
                         _sharingStarted = true;
                         StopProjectTimer();
                         StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                        StatusMessage.Text = "Model Sharing complete. Opening Trimble Connect collaboration in Tekla...";
-                        string connectOutcome = await Task.Run(
-                            () => RunConnectMacroHelper(_expectedModelPath));
-                        StatusMessage.Text = "Model created; project properties saved; " +
-                            "Model Sharing started. Trimble Connect: " + connectOutcome;
+                        StatusMessage.Text = "Model created, project properties saved, and " +
+                            "Tekla Model Sharing started. In Tekla, choose File > Trimble Connect > " +
+                            "Start collaboration to link the model to a Severfield Connect project.";
                     }
                 }
                 else if (outcome == "ERROR")
