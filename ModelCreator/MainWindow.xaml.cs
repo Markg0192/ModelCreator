@@ -172,54 +172,100 @@ namespace ModelCreator
         {
             if (_projectTimer != null && _projectTimer.IsEnabled)
             {
-                StatusMessage.Text = "Finish model setup before connecting Trimble Connect.";
+                StatusMessage.Text = "Wait for model setup to finish.";
                 return;
             }
 
+            ConnectTestButton.IsEnabled = false;
             try
             {
-                string name = ModelNaming.ValidateAndBuild(
+                string modelName = ModelNaming.ValidateAndBuild(
                     ContractNumberInput.Text, ProjectNameInput.Text);
-                string expected = Path.GetFullPath(_launcher.GetDestination(name))
-                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                string diagnostic;
-                string connected = TeklaProjectProperties.GetConnectedModelPath(out diagnostic);
-                if (connected == null)
-                    throw new InvalidOperationException(diagnostic);
-                if (!string.Equals(expected, connected, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Wrong model open. Connected: " + connected +
-                        " | Expected: " + expected);
+                string expected = _launcher.GetDestination(modelName);
+                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                StatusMessage.Text = "Opening Tekla's built-in Trimble Connect collaboration...";
+                string result = await Task.Run(() => RunConnectMacroHelper(expected));
+                StatusMessage.Text = result;
+                if (result.StartsWith("OK:", StringComparison.Ordinal))
+                {
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
+                }
+                else
+                {
+                    StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
+                }
 
-                ConnectTestButton.IsEnabled = false;
-                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Trimble Connect: opening Trimble Identity sign-in...";
-                string token = await TrimbleIdentity.LoginAsync();
-                string auth = await TrimbleConnectAccess.DiagnoseAsync(token);
-                string outcome = auth.StartsWith("Trimble Connect sign-in and API authentication succeeded.", StringComparison.Ordinal)
-                    ? await TrimbleConnectProjects.PreflightAsync(token, name) + "\n\n" +
-                        await TrimbleLicenseDiscovery.InspectAsync(token) + "\n\n" +
-                        await TrimbleConnectProjects.InspectProjectOwnershipAsync(token) : auth;
-                StatusMessage.Foreground = System.Windows.Media.Brushes.DarkOrange;
-                StatusMessage.Text = "Trimble Connect diagnostic complete. See results window.";
                 new ConnectDiagnosticsWindow(
-                    "Open model: " + name + " | Region: Europe | Read-only API inspection",
-                    "Connected Tekla model: " + connected +
-                    "\nProject name: " + name +
-                    "\nServer: Europe" +
-                    "\nExpected licence: Severfield plc — TrimbleConnectBusinessPremium" +
-                    "\n\n" + outcome)
+                    "Tekla 2026 built-in Trimble Connect collaboration",
+                    result + "\n\nExpected Connect project name: " + modelName +
+                    "\nRegion: Europe" +
+                    "\nLicence: TrimbleConnectBusinessPremium — Severfield plc" +
+                    "\n\nThis button opens the Tekla-side workflow through a recorded macro " +
+                    "if available. It does not claim the cloud project is created or linked.")
                 { Owner = this }.ShowDialog();
             }
             catch (Exception ex)
             {
                 StatusMessage.Foreground = System.Windows.Media.Brushes.Firebrick;
-                StatusMessage.Text = "Trimble Connect test: " + ex.Message;
+                StatusMessage.Text = "Trimble Connect: " + ex.Message;
                 MessageBox.Show(StatusMessage.Text, "Trimble Connect",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             finally
             {
                 ConnectTestButton.IsEnabled = true;
+            }
+        }
+
+        private static string RunConnectMacroHelper(string expectedPath)
+        {
+            string resultFile = Path.Combine(Path.GetTempPath(),
+                "ModelCreatorConnect_" + Guid.NewGuid().ToString("N") + ".txt");
+            try
+            {
+                string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                var info = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = "--open-connect " + QuoteArg(expectedPath) + " " +
+                        QuoteArg(resultFile),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetDirectoryName(exe)
+                };
+                using (Process child = Process.Start(info))
+                {
+                    if (child == null)
+                        throw new InvalidOperationException("Could not start Tekla macro helper.");
+                    DateTime deadline = DateTime.UtcNow.AddSeconds(25);
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        if (File.Exists(resultFile))
+                        {
+                            try
+                            {
+                                string result = File.ReadAllText(resultFile);
+                                if (!string.IsNullOrWhiteSpace(result))
+                                    return result;
+                            }
+                            catch (IOException) { }
+                        }
+                        if (child.HasExited) break;
+                        System.Threading.Thread.Sleep(250);
+                    }
+                    if (!child.HasExited)
+                    {
+                        child.Kill();
+                        child.WaitForExit(3000);
+                    }
+                }
+                return "ERROR: No response from Tekla macro helper.";
+            }
+            finally
+            {
+                try { if (File.Exists(resultFile)) File.Delete(resultFile); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
         }
 
@@ -358,7 +404,8 @@ namespace ModelCreator
                         _sharingStarted = true;
                         StopProjectTimer();
                         StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                        StatusMessage.Text = "Model setup complete: project properties saved and " + diagnostic;
+                        StatusMessage.Text = "Model setup complete: project properties saved and " + diagnostic +
+                            " | Next: use Open Tekla Connect to create and link the Connect project.";
                     }
                 }
                 else if (outcome == "ERROR")
