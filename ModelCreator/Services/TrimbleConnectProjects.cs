@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -47,7 +48,7 @@ namespace ModelCreator.Services
 
         // Operates only on an existing uniquely named Europe project. No new project POST.
         public static async Task<string> AddTestFoldersToExistingProjectAsync(
-            string accessToken, string exactName)
+            string accessToken, string exactName, List<SharingInvitee> invitees = null)
         {
             using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
             {
@@ -181,6 +182,46 @@ namespace ModelCreator.Services
                                     ex.GetType().Name + ": " + ex.Message + "). " +
                                     "Check Connect before retrying.");
                                 break;
+                            }
+                        }
+                        if (invitees != null && invitees.Count > 0 &&
+                            report.ToString().Contains("test 1: POST accepted") &&
+                            report.ToString().Contains("test 2: POST accepted"))
+                        {
+                            // Same verified Europe project ID as the folders. Owner maps
+                            // to ADMIN; all other Tekla roles map to USER.
+                            // Send one request only; API errors or ambiguous replies
+                            // must never cause automatic duplicate invitations.
+                            var members = new JArray(invitees.Select(user => new JObject
+                            {
+                                ["email"] = user.Email,
+                                ["role"] = user.Role == "Owner" ? "ADMIN" : "USER"
+                            }));
+                            try
+                            {
+                                using (var body = new StringContent(
+                                    members.ToString(), Encoding.UTF8, "application/json"))
+                                using (var responseInvite = await http.PostAsync(
+                                    EuropeBase + "projects/" + Uri.EscapeDataString(id) +
+                                    "/users", body).ConfigureAwait(false))
+                                {
+                                    string inviteBody = await responseInvite.Content
+                                        .ReadAsStringAsync().ConfigureAwait(false);
+                                    if (!responseInvite.IsSuccessStatusCode)
+                                        report.AppendLine("CONNECT INVITES FAILED: HTTP " +
+                                            (int)responseInvite.StatusCode + " " +
+                                            inviteBody.Substring(0, Math.Min(inviteBody.Length, 500)));
+                                    else
+                                        report.AppendLine("CONNECT INVITES SUBMITTED for " +
+                                            invitees.Count + " users (HTTP " +
+                                            (int)responseInvite.StatusCode + ").");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                report.AppendLine("CONNECT INVITES UNCERTAIN: " +
+                                    ex.GetType().Name + ": " + ex.Message +
+                                    ". Verify memberships before retrying.");
                             }
                         }
                         return report.ToString();
