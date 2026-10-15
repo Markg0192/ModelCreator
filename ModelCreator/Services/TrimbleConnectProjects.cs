@@ -33,13 +33,48 @@ namespace ModelCreator.Services
                     if (items == null) return "BLOCKED: Unexpected Europe project list.";
                     var matches = items.Where(p => string.Equals((string)p["name"],
                         exactName, StringComparison.OrdinalIgnoreCase)).ToList();
-                    if (matches.Count != 1)
-                        return "BLOCKED: Found " + matches.Count +
-                            " Europe projects named '" + exactName +
-                            "'. Exactly one required to avoid editing the wrong project.";
-                    string id = (string)matches[0]["id"];
-                    if (string.IsNullOrWhiteSpace(id))
-                        return "BLOCKED: Existing project has no ID.";
+                    if (matches.Count == 0)
+                        return "BLOCKED: No Europe project named '" + exactName + "' found.";
+
+                    // Do not assume the API list is ordered newest first.
+                    // Request each matching project's details to find a reliable date.
+                    var candidates = new System.Collections.Generic.List<Tuple<string, DateTimeOffset>>();
+                    foreach (JToken match in matches)
+                    {
+                        string candidateId = (string)match["id"];
+                        if (string.IsNullOrWhiteSpace(candidateId)) continue;
+                        using (var candidateResponse = await http.GetAsync(
+                            EuropeBase + "projects/" + Uri.EscapeDataString(candidateId))
+                            .ConfigureAwait(false))
+                        {
+                            if (!candidateResponse.IsSuccessStatusCode)
+                                return "BLOCKED: Cannot verify all duplicate projects (HTTP " +
+                                    (int)candidateResponse.StatusCode + "). No folders created.";
+                            JObject candidate = JObject.Parse(await candidateResponse.Content
+                                .ReadAsStringAsync().ConfigureAwait(false));
+                            string createdText = (string)candidate["createdOn"] ??
+                                (string)candidate["createdAt"] ??
+                                (string)candidate["creationDate"] ??
+                                (string)candidate["created"];
+                            DateTimeOffset createdOn;
+                            if (!DateTimeOffset.TryParse(createdText, out createdOn))
+                                return "BLOCKED: Project '" + candidateId +
+                                    "' has no interpretable creation date. Available fields: " +
+                                    string.Join(", ", candidate.Properties().Select(x => x.Name)) +
+                                    ". No folders created.";
+                            candidates.Add(Tuple.Create(candidateId, createdOn));
+                        }
+                    }
+                    if (candidates.Count != matches.Count)
+                        return "BLOCKED: Could not verify every duplicate project.";
+                    var newest = candidates.OrderByDescending(x => x.Item2).ToList();
+                    if (newest.Count > 1 && newest[0].Item2 == newest[1].Item2)
+                        return "BLOCKED: Two projects have identical latest creation dates. " +
+                            "Cannot determine newest safely.";
+                    string id = newest[0].Item1;
+                    string selectionNote = "Found " + matches.Count + " matching Europe projects. " +
+                        "Selected newest: " + id + ", created " +
+                        newest[0].Item2.ToString("u") + ".";
                     using (var detailsResponse = await http.GetAsync(
                         EuropeBase + "projects/" + Uri.EscapeDataString(id)).ConfigureAwait(false))
                     {
@@ -70,6 +105,7 @@ namespace ModelCreator.Services
                                 string.Join(", ", detail.Properties().Select(x => x.Name)) +
                                 ". No folder creation attempted.";
                         var report = new StringBuilder();
+                        report.AppendLine(selectionNote);
                         report.AppendLine("Verified Europe project: " + exactName + " (" + id + ")");
                         report.AppendLine("Verified licence: " + organization + " / " + sku);
                         report.AppendLine("Root folder ID: " + rootId);
