@@ -192,18 +192,32 @@ namespace ModelCreator.Services
                             // to ADMIN; all other Tekla roles map to USER.
                             // Send one request only; API errors or ambiguous replies
                             // must never cause automatic duplicate invitations.
-                            var members = new JArray(invitees.Select(user => new JObject
+                            // Documented Core Account API expects an array of
+                            // project update jobs (not an array of bare users).
+                            // Each job can contain a maximum of 15 user updates.
+                            if (invitees.Count > 15)
                             {
+                                report.AppendLine("CONNECT INVITES FAILED: Maximum 15 users per request. " +
+                                    "No invitations submitted.");
+                                return report.ToString();
+                            }
+                            var updates = new JArray(invitees.Select(user => new JObject
+                            {
+                                ["action"] = "ADD",
                                 ["email"] = user.Email,
                                 ["role"] = user.Role == "Owner" ? "ADMIN" : "USER"
                             }));
+                            var members = new JArray(new JObject
+                            {
+                                ["projectId"] = id,
+                                ["updates"] = updates
+                            });
                             try
                             {
                                 using (var body = new StringContent(
                                     members.ToString(), Encoding.UTF8, "application/json"))
                                 using (var responseInvite = await http.PostAsync(
-                                    EuropeBase + "projects/" + Uri.EscapeDataString(id) +
-                                    "/users", body).ConfigureAwait(false))
+                                    "https://projects-api.connect.trimble.com/v1/projects/update-users", body).ConfigureAwait(false))
                                 {
                                     string inviteBody = await responseInvite.Content
                                         .ReadAsStringAsync().ConfigureAwait(false);
@@ -214,7 +228,8 @@ namespace ModelCreator.Services
                                     else
                                         report.AppendLine("CONNECT INVITES SUBMITTED for " +
                                             invitees.Count + " users (HTTP " +
-                                            (int)responseInvite.StatusCode + ").");
+                                            (int)responseInvite.StatusCode +
+                                            "). Membership updates are asynchronous; verify completion in Connect.");
                                 }
                             }
                             catch (Exception ex)
