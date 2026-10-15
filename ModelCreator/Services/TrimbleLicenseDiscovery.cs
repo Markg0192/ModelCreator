@@ -18,8 +18,6 @@ namespace ModelCreator.Services
             string[] routes =
             {
                 "https://app.connect.trimble.com/tc/api/2.0/users/me",
-                "https://app.connect.trimble.com/tc/api/2.0/users/me/licenses",
-                "https://app.connect.trimble.com/tc/api/2.0/licenses",
                 "https://app21.connect.trimble.com/tc/api/2.0/users/me"
             };
 
@@ -44,11 +42,15 @@ namespace ModelCreator.Services
                             string body = await response.Content.ReadAsStringAsync()
                                 .ConfigureAwait(false);
                             JToken root = JToken.Parse(body);
+                            var top = root as JObject;
+                            if (top != null)
+                                output.AppendLine("  Response fields: " + string.Join(", ",
+                                    top.Properties().Select(x => x.Name).Take(35)));
                             List<JObject> candidates = new List<JObject>();
                             FindCandidates(root, candidates, 0);
                             if (candidates.Count == 0)
                             {
-                                output.AppendLine("  No identifiable licence records in this response.");
+                                output.AppendLine("  No identifiable licence records in this response. (Field names above; no personal profile values shown.)");
                                 continue;
                             }
                             foreach (JObject item in candidates.Take(12))
