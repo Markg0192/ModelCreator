@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.Linq;
 using System.Collections.ObjectModel;
 using Newtonsoft.Json;
 using System.IO;
@@ -208,7 +209,7 @@ namespace ModelCreator
                     throw new InvalidOperationException("Wrong Tekla model is open. " +
                         (connected ?? diagnostic) + ". Nothing created.");
 
-                if (MessageBox.Show("Create root-level folders 'test 1' and 'test 2' " +
+                if (MessageBox.Show("Create the standard nine root-level folders " +
                     "in the existing Europe Trimble Connect project '" + modelName +
                     "'?\n\nThis will not create another Connect project. " +
                     "The project and Severfield Business Premium ownership will be " +
@@ -559,8 +560,8 @@ namespace ModelCreator
             }
             lastResult = await TrimbleConnectProjects.AddTestFoldersToExistingProjectAsync(
                 token, name, _pendingUsers);
-            if (!lastResult.Contains("test 1: POST accepted") ||
-                !lastResult.Contains("test 2: POST accepted"))
+            if (!new[] { "00 - Client Model", "01 - WIP Model", "02 - Design", "03 - GA's", "04 - Fab Drawing Vault", "05 - Site Works", "06 - Lotting & Load Lists", "07 - Construction", "99 - Trimble Connect Training" }.All(folder =>
+                    lastResult.Contains(folder + ": POST accepted")))
                 return "CONNECT FOLDERS NOT CONFIRMED: " + lastResult +
                     "\nCheck Connect before retrying. Model Sharing not started.";
             if (lastResult.Contains("CONNECT USERS PENDING:"))
@@ -645,7 +646,7 @@ namespace ModelCreator
                         _sharingStarted = true;
                         StopProjectTimer();
                         StatusMessage.Foreground = System.Windows.Media.Brushes.DarkGreen;
-                        StatusMessage.Text = "Model created, properties saved, Connect project and test folders created, " +
+                        StatusMessage.Text = "Model created, properties saved, Connect project and standard folders created, " +
                             "and Tekla Model Sharing started. " + diagnostic +
                             (_lastDiagnostic.Contains("CONNECT USERS PENDING:") ?
                             " WARNING: Connect members still need to be invited from its Team page." : "");
